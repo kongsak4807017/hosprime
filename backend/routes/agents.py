@@ -1,14 +1,14 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.ai import chat_completion
 from core.database import db
 from core.security import STAFF_ROLES, require_roles
-from core.utils import now_iso
+from core.utils import audit_log, now_iso
 
 router = APIRouter(prefix="/agents", tags=["digital-twin-agents"])
 
@@ -16,6 +16,30 @@ router = APIRouter(prefix="/agents", tags=["digital-twin-agents"])
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+
+
+class CustomAgentCreate(BaseModel):
+    name: str
+    name_en: Optional[str] = ""
+    icon: str = "bot"
+    description: Optional[str] = ""
+    duty: str = Field(min_length=3)
+    expertise: Optional[str] = ""
+    instructions: str = Field(min_length=10)
+    data_scopes: List[str] = []
+    is_active: bool = True
+
+
+class CustomAgentUpdate(BaseModel):
+    name: Optional[str] = None
+    name_en: Optional[str] = None
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    duty: Optional[str] = None
+    expertise: Optional[str] = None
+    instructions: Optional[str] = None
+    data_scopes: Optional[List[str]] = None
+    is_active: Optional[bool] = None
 
 
 # ---------- Live context builders per department head ----------
@@ -110,6 +134,15 @@ async def _ctx_head_finance() -> str:
     return f"รายรับวันนี้: {rev_t:,.0f} บาท | รายรับเดือนนี้: {rev_m:,.0f} บาท | เคลมรอพิจารณา: {claims} รายการ\n\nบิลค้างชำระสูงสุด:\n{out_txt}"
 
 
+async def _ctx_documents() -> str:
+    status_agg = await db.documents.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}]).to_list(10)
+    statuses = ", ".join(f"{i['_id']}: {i['count']}" for i in status_agg) or "ยังไม่มีเอกสาร"
+    recent = await db.documents.find({}, {"_id": 0, "doc_number": 1, "title": 1, "status": 1, "created_by_name": 1}).sort("created_at", -1).limit(8).to_list(8)
+    recent_txt = "\n".join(f"- {d['doc_number']} {d['title']} ({d['status']}) โดย {d['created_by_name']}" for d in recent) or "ไม่มี"
+    templates = await db.doc_templates.count_documents({})
+    return f"เอกสารในระบบแยกสถานะ: {statuses} | เทมเพลตเอกสาร: {templates} แบบ\n\nเอกสารล่าสุด:\n{recent_txt}"
+
+
 AGENTS = {
     "director": {
         "name": "ผู้อำนวยการโรงพยาบาล",
@@ -162,17 +195,107 @@ AGENTS = {
 }
 
 
+CONTEXT_SCOPES = {
+    "overview": {"label": "ภาพรวมโรงพยาบาล/บริหาร", "builder": _ctx_director},
+    "clinical": {"label": "คลินิก/การรักษา", "builder": _ctx_cmo},
+    "nursing": {"label": "การพยาบาล/คิวผู้ป่วย", "builder": _ctx_head_nurse},
+    "pharmacy": {"label": "เภสัชกรรม/คลังยา", "builder": _ctx_head_pharmacy},
+    "lab": {"label": "ห้องปฏิบัติการ", "builder": _ctx_head_lab},
+    "finance": {"label": "การเงิน/บิล", "builder": _ctx_head_finance},
+    "documents": {"label": "ระบบเอกสาร/สารบรรณ", "builder": _ctx_documents},
+}
+
+
+async def _resolve_agent(agent_key: str):
+    """Returns (kind, agent_dict) — builtin digital twin or admin-created custom agent."""
+    if agent_key in AGENTS:
+        return "builtin", AGENTS[agent_key]
+    custom = await db.custom_agents.find_one({"id": agent_key}, {"_id": 0})
+    if custom:
+        return "custom", custom
+    return None, None
+
+
 @router.get("")
 async def list_agents(user: dict = Depends(require_roles(*STAFF_ROLES))):
-    return [
-        {"key": k, "name": a["name"], "name_en": a["name_en"], "icon": a["icon"], "description": a["description"]}
+    builtin = [
+        {"key": k, "name": a["name"], "name_en": a["name_en"], "icon": a["icon"],
+         "description": a["description"], "is_builtin": True, "is_active": True}
         for k, a in AGENTS.items()
     ]
+    query = {} if user["role"] == "admin" else {"is_active": True}
+    custom_docs = await db.custom_agents.find(query, {"_id": 0}).sort("created_at", 1).to_list(200)
+    custom = [
+        {"key": c["id"], "name": c["name"], "name_en": c.get("name_en", ""), "icon": c.get("icon", "bot"),
+         "description": c.get("description", ""), "duty": c.get("duty", ""), "expertise": c.get("expertise", ""),
+         "instructions": c.get("instructions", ""), "data_scopes": c.get("data_scopes", []),
+         "is_builtin": False, "is_active": c.get("is_active", True), "created_by_name": c.get("created_by_name", "")}
+        for c in custom_docs
+    ]
+    return builtin + custom
+
+
+@router.get("/scopes")
+async def list_scopes(user: dict = Depends(require_roles(*STAFF_ROLES))):
+    return [{"key": k, "label": v["label"]} for k, v in CONTEXT_SCOPES.items()]
+
+
+# ---------- Custom Agent Studio (admin = organization manager) ----------
+
+@router.post("/custom", status_code=201)
+async def create_custom_agent(body: CustomAgentCreate, user: dict = Depends(require_roles("admin"))):
+    invalid = [s for s in body.data_scopes if s not in CONTEXT_SCOPES]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"ขอบเขตข้อมูลไม่ถูกต้อง: {', '.join(invalid)}")
+    agent = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_by": user["id"],
+        "created_by_name": user["full_name"],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.custom_agents.insert_one(agent)
+    await audit_log(user, "create", "custom_agent", agent["id"], body.name)
+    agent.pop("_id", None)
+    return agent
+
+
+@router.put("/custom/{agent_id}")
+async def update_custom_agent(agent_id: str, body: CustomAgentUpdate, user: dict = Depends(require_roles("admin"))):
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="ไม่มีข้อมูลที่ต้องการแก้ไข")
+    if "data_scopes" in updates:
+        invalid = [s for s in updates["data_scopes"] if s not in CONTEXT_SCOPES]
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"ขอบเขตข้อมูลไม่ถูกต้อง: {', '.join(invalid)}")
+    updates["updated_at"] = now_iso()
+    result = await db.custom_agents.update_one({"id": agent_id}, {"$set": updates})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="ไม่พบ Agent")
+    await audit_log(user, "update", "custom_agent", agent_id)
+    return await db.custom_agents.find_one({"id": agent_id}, {"_id": 0})
+
+
+@router.delete("/custom/{agent_id}")
+async def delete_custom_agent(agent_id: str, user: dict = Depends(require_roles("admin"))):
+    result = await db.custom_agents.delete_one({"id": agent_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="ไม่พบ Agent")
+    sessions = await db.agent_sessions.find({"agent_key": agent_id}, {"_id": 0, "id": 1}).to_list(1000)
+    session_ids = [s["id"] for s in sessions]
+    if session_ids:
+        await db.agent_messages.delete_many({"session_id": {"$in": session_ids}})
+        await db.agent_sessions.delete_many({"agent_key": agent_id})
+    await audit_log(user, "delete", "custom_agent", agent_id)
+    return {"message": "ลบ Agent สำเร็จ"}
 
 
 @router.get("/{agent_key}/sessions")
 async def list_sessions(agent_key: str, user: dict = Depends(require_roles(*STAFF_ROLES))):
-    if agent_key not in AGENTS:
+    kind, _ = await _resolve_agent(agent_key)
+    if not kind:
         raise HTTPException(status_code=404, detail="ไม่พบ Agent")
     sessions = await db.agent_sessions.find(
         {"agent_key": agent_key, "user_id": user["id"]}, {"_id": 0}

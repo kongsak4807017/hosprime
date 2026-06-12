@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 1 HosPRIME full backend + frontend testing. Backend pytest 26/27 (96%) — single failure is a test-side timing artifact (same-second JWT identical strings), not a backend defect. Frontend smoke covers admin login → dashboard → patients CRUD (Thai search 'สมชาย', allergy alert, vitals, create new patient with auto PAT-000010), appointments page (book dialog opens, status filters), finance RBAC (sidebar shown, no add-patient button), logout, unauthenticated redirect. All critical flows work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/refresh", "issue": "Returned new access_token has identical string to old when called within same second (JWT exp granularity = 1s). Endpoint itself returns 200 and works in real usage. Consider adding 'iat' or 'jti' nonce for guaranteed token uniqueness."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AppointmentsPage booking dialog", "issues": ["React hydration warning: <span> cannot be a child of <option>. Located in AppointmentsPage.jsx around line 130 — the native <select><option> contains an x-component span wrapper for dynamic text. Cosmetic but pollutes console. Render plain text inside <option>, no nested spans."]},
+      {"screen": "Multiple Radix Dialogs (booking, vitals)", "issues": ["a11y warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. Add <DialogDescription> or aria-describedby to each DialogContent."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: add iat/jti to JWT payload so refresh always returns a different token string within the same second.",
+    "Fix hydration warning in AppointmentsPage.jsx: remove <span> wrapper inside <option> elements (line ~130).",
+    "Add DialogDescription / aria-describedby to DialogContent components (booking, vitals, edit, add-patient) for a11y."
+  ],
+  "critical_code_review_comments": [
+    "Auth: bcrypt hashing ($2b$), httpOnly cookies with samesite=lax, CORS allow_credentials with origins from env — looks correct. Note CORS_ORIGINS default is '*' which combined with allow_credentials=True is invalid per spec; in production set explicit origin list.",
+    "secure=False on cookies is OK for preview but must be True in production HTTPS deployment.",
+    "Brute-force lockout is keyed on ip:email — verified by inspecting code, not tested live (would have caused 15-min lockout). 5-attempt threshold matches spec.",
+    "Seed.seed_admin updates password when env value changes — idempotent and matches playbook.",
+    "Patients/appointments routes correctly exclude MongoDB _id from responses.",
+    "Soft delete on patients (is_active=False) correctly filters list endpoint.",
+    "Appointment double-booking guard excludes cancelled/no_show — verified via pytest (409 returned).",
+    "Patient list search uses $regex without escaping — minor risk of malformed regex from user input causing 500. Consider re.escape or text-index."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new)",
+    "/app/backend/tests/__init__.py (new)"
+  ],
+  "success_rate": {"backend": "96% (26/27)", "frontend": "100% of tested flows"},
+  "test_credentials": "Used /app/memory/test_credentials.md as-is (admin@hosprime.com/Admin@1234, finance@hosprime.com/Test@1234, doctor/nurse @Test@1234).",
+  "seed_data_creation": "Created TEST_ patients via API and one front-end patient 'TESTFE AUTO79343' (PAT-000010). Created several test staff users via /api/auth/register (test_xxxx@hosprime.com). Soft-delete on test patient executed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/backend_test.py. Avoid running login with wrong password >4 times on the same email — lockout=15min/HTTP 429. Appointments page uses native <select> elements (not Radix Select), so UI tests should use page.select_option() / fill instead of looking for role=option. Seed data is created only if patients collection is empty; if you need a fresh state, drop patients/appointments collections and restart backend."
+}

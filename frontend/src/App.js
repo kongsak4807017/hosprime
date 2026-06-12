@@ -1,55 +1,50 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Layout } from "@/components/Layout";
+import LoginPage from "@/pages/LoginPage";
+import DashboardPage from "@/pages/DashboardPage";
+import PatientsPage from "@/pages/PatientsPage";
+import PatientFormPage from "@/pages/PatientFormPage";
+import PatientDetailPage from "@/pages/PatientDetailPage";
+import AppointmentsPage from "@/pages/AppointmentsPage";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const ProtectedRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (user === undefined)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F9F9F8] text-[#546E62]">
+        กำลังตรวจสอบสิทธิ์...
+      </div>
+    );
+  if (user === null) return <Navigate to="/login" replace />;
+  return <Layout>{children}</Layout>;
 };
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      <Route path="/patients" element={<ProtectedRoute><PatientsPage /></ProtectedRoute>} />
+      <Route path="/patients/new" element={<ProtectedRoute><PatientFormPage /></ProtectedRoute>} />
+      <Route path="/patients/:id" element={<ProtectedRoute><PatientDetailPage /></ProtectedRoute>} />
+      <Route path="/patients/:id/edit" element={<ProtectedRoute><PatientFormPage /></ProtectedRoute>} />
+      <Route path="/appointments" element={<ProtectedRoute><AppointmentsPage /></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <AppRoutes />
+        <Toaster position="top-right" richColors />
       </BrowserRouter>
-    </div>
+    </AuthProvider>
   );
 }
 

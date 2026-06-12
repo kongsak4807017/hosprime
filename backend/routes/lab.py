@@ -186,6 +186,8 @@ async def submit_results(test_id: str, body: LabResultsSubmit, user: dict = Depe
     has_abnormal = False
     for pv in body.parameters:
         ref = param_refs.get(pv.name)
+        if param_refs and not ref:
+            raise HTTPException(status_code=400, detail=f"ไม่พบพารามิเตอร์ '{pv.name}' ในรายการตรวจนี้")
         is_abnormal = False
         reference_range = ""
         unit = ""

@@ -24,17 +24,22 @@
 - Seed data: 8 Thai patients, 8 appointments, 7 user accounts (see /app/memory/test_credentials.md)
 - Testing: testing_agent iteration_1 — backend 96%→fixed→27/27 pytest pass, frontend 100%
 
+## Implemented (2026-06-12) — Phase 2 Clinical Modules ✅ TESTED
+- **Pharmacy** (`routes/pharmacy.py`, `PharmacyPage.jsx` 3 tabs): drug inventory CRUD (DRG-XXXXXX) + batches, stock adjust (atomic guarded $inc with rollback on dispense), low-stock + 90-day expiry alerts (/api/pharmacy/alerts), prescriptions (PRE-XXXXXX, doctor creates, pharmacist dispenses → stock deducted, cancel)
+- **Laboratory** (`routes/lab.py`, `LabPage.jsx`): 8-test catalog with parameters + reference ranges (CBC, FBS, Lipid, HbA1c, LFT, Kidney, UA, TSH), order (LAB-XXXXXX, doctor) → collect sample (SMP id, lab tech/nurse) → enter results (auto abnormal flagging vs ref range, unknown param = 400) → view results with red ผิดปกติ flags
+- **Billing** (`routes/billing.py`, `BillingPage.jsx`): invoices (INV-XXXXXX, server-computed totals, finance/admin), payments (partial/full → status pending/partially_paid/paid, overpay 400), insurance claims (CLM-XXXXXX submit → approve/reject with approved_amount), cancel, /api/billing/stats (revenue today/month UTC, outstanding, pending count)
+- RBAC enforced: prescribe=doctor/admin, dispense+drug write=pharmacist/admin, lab order=doctor/admin, collect=lab/nurse/admin, results=lab/admin, billing write=finance/admin; all staff read
+- Seed: 10 drugs (Amlodipine low-stock, Amoxicillin expiring ~45d), 2 prescriptions, 3 lab tests, 3 invoices
+- Testing: testing_agent iteration_2 — backend 32/32, frontend 100%; full pytest suite 59/59 at /app/backend/tests/
+
 ## Backlog / Roadmap
-### P0 — Phase 2: Clinical Modules
-- Pharmacy management (drug inventory, prescriptions, dispensing, expiry alerts)
-- Laboratory management (test orders, samples, results, reference ranges)
-- Billing & finance (invoices, payments, insurance claims)
-### P1 — Phase 3: Intelligence Layer (use Emergent LLM Key: available in env)
+### P0 — Phase 3: Intelligence Layer (use Emergent LLM Key: available in env)
 - AI Medical Assistant chatbot (LLM, with session ids)
+- AI Drug interaction checker on prescriptions
 - Knowledge graph (medical knowledge queries)
 - Predictive analytics (no-show prediction, risk stratification)
-- Lab report summarization, drug interaction checker
-### P2 — Phase 4
+- Lab report summarization
+### P1 — Phase 4
 - Bed & room management, staff scheduling, advanced reports/exports, patient portal (patient role currently placeholder), MFA, GitHub master product preparation
 
 ## Known Notes

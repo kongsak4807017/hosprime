@@ -236,12 +236,19 @@ async def dispense_prescription(prescription_id: str, user: dict = Depends(requi
                 status_code=400,
                 detail=f"ยา {med['drug_name']} ในคลังไม่เพียงพอ (ต้องการ {med['quantity']} มี {available})",
             )
-    # Deduct stock
+    # Deduct stock atomically (guard against concurrent dispensing)
+    deducted = []
     for med in pres["medications"]:
-        await db.drugs.update_one(
-            {"id": med["drug_id"]},
+        result = await db.drugs.update_one(
+            {"id": med["drug_id"], "quantity_in_stock": {"$gte": med["quantity"]}},
             {"$inc": {"quantity_in_stock": -med["quantity"]}, "$set": {"updated_at": now_iso()}},
         )
+        if result.modified_count == 0:
+            # Roll back already-deducted items
+            for d_id, qty in deducted:
+                await db.drugs.update_one({"id": d_id}, {"$inc": {"quantity_in_stock": qty}})
+            raise HTTPException(status_code=400, detail=f"ยา {med['drug_name']} ในคลังไม่เพียงพอ (สต็อกเปลี่ยนแปลงระหว่างจ่ายยา)")
+        deducted.append((med["drug_id"], med["quantity"]))
     await db.prescriptions.update_one(
         {"id": prescription_id},
         {"$set": {

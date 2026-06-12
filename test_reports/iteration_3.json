@@ -1,0 +1,38 @@
+{
+  "summary": "Phase 3 (Intelligence Layer) testing complete. Backend pytest 32/32 PASSED in 137s (AI Settings, Data Connector w/ real LLM scan, Knowledge Graph build+query, Digital Twin Agents multi-turn chat). Frontend critical paths all functional: AI Settings test connection returns Thai reply, Pharmacy Agent multi-turn chat works with real Amlodipine data, Graph AI query returns Thai answer mentioning สมชาย+Penicillin, Connector page renders with internal source + One-Click Scan, RBAC sidebar correctly hides Data Connector + ตั้งค่า AI for doctor while keeping AI Agents + Knowledge Graph. Regression smoke (dashboard/patients/pharmacy) still loads OK. AI Settings restored to emergent/openai/gpt-5.2 at end as required.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard chart", "issues": ["Recharts width=-1/height=-1 console warning on first render before container measures — cosmetic only, chart renders correctly on second tick."]},
+      {"screen": "Graph canvas", "issues": ["Canvas2D willReadFrequently warning from react-force-graph-2d — purely a perf hint, not a bug."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3.py",
+    "/app/test_reports/pytest/pytest_phase3_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ai_settings.py PUT validates llm_provider only when provider=emergent, but if a custom provider sends a bogus llm_provider it silently passes through (saved verbatim). Minor since UI gates it.",
+    "ai_settings.py POST /settings/test returns 200 with {success:false,error} on AI failure instead of a 4xx/5xx — frontend must inspect the success flag (it does, via ai-test-result). Slightly inconsistent with other endpoints that raise HTTPException.",
+    "connector.py /upload: only authenticated admins can upload, but file is read fully into memory (up to 20MB) before pandas parsing — fine for current SLA, but for larger files, stream to tempfile. uploaded_datasets stores only first 1000 rows (df.head(1000)) — document this limit or surface it in the API response.",
+    "connector.py _scan_mongo iterates sorted(names)[:30] which silently caps at 30 collections. Acceptable but should be configurable / surfaced in response (currently the user has no signal that some collections were skipped).",
+    "graph_kg.py /build is O(patients+prescriptions+appointments) all in-memory — for the seeded data fine, but at scale would benefit from batching the kg_nodes/kg_edges inserts and using upserts instead of delete_many+insert_many (causes a window where graph is empty).",
+    "graph_kg.py /query: _build_query_context uses simple substring match against node labels (split by spaces, len>=3). Won't match Thai/short names well — query worked here because LLM has full edge list as fallback. Consider adding a vector / embeddings index later.",
+    "agents.py: every chat call re-runs the full context aggregation (e.g. _ctx_head_finance does an aggregate over invoices). For high traffic, cache live_context per agent_key for ~30s. Not urgent.",
+    "agents.py: history limit is last 12 messages — beyond that older context is dropped silently. Document or expose this. Multi-turn works fine within the window.",
+    "All Phase 3 routes correctly: exclude _id, use require_roles RBAC, mask api_key + connection_string, return Thai error details, validate Pydantic input. No regressions vs Phase 1/2."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3.py (new)"
+  ],
+  "success_rate": {"backend": "100% (32/32)", "frontend": "100% of tested admin + RBAC + regression flows"},
+  "test_credentials": "Used /app/memory/test_credentials.md as-is (admin@hosprime.com / Admin@1234, doctor@hosprime.com / Test@1234, nurse@hosprime.com / Test@1234).",
+  "seed_data_creation": "Tests created TEST_External MongoDB source + TEST_patients.csv file source (both cleaned up). Knowledge graph rebuilt (33 nodes / 33 edges visible in UI after build). One admin chat session in head_pharmacy created and then deleted at end of test. Agent sessions belonging to UI runs left in place (visible in left panel) — non-blocking.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 pytest at /app/backend/tests/test_phase3.py — run with `REACT_APP_BACKEND_URL=https://production-ready-195.preview.emergentagent.com pytest tests/test_phase3.py` from /app/backend (takes ~2.5 min due to ~6 LLM calls). Settings auto-restored to emergent/openai/gpt-5.2 at the end of TestAISettings. test_first_message_llm / test_multi_turn store the session in TestAgents.session_id (class var) — tests run in order within the class. AI 'test connection' endpoint sometimes self-identifies as 'OpenAI o3' even when model=gpt-5.2 — this is normal LLM behavior (the deployment label != the model's self-knowledge), assertions tolerate this. KG /query context builder uses simple substring match — Thai questions still work because the LLM also gets a fallback edge sample.",
+  "rca_of_the_issue": "N/A — no failures."
+}

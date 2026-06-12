@@ -15,6 +15,9 @@ import {
   Menu,
   X,
   HeartPulse,
+  Share2,
+  DatabaseZap,
+  Settings2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -28,12 +31,15 @@ const MENU = [
   { label: "เภสัชกรรม", icon: Pill, path: "/pharmacy", roles: STAFF, testId: "nav-pharmacy" },
   { label: "ห้องปฏิบัติการ", icon: FlaskConical, path: "/lab", roles: STAFF, testId: "nav-lab" },
   { label: "การเงิน & บิล", icon: Receipt, path: "/billing", roles: STAFF, testId: "nav-billing" },
+  { label: "AI Agents", icon: Bot, path: "/agents", roles: STAFF, testId: "nav-agents" },
+  { label: "Knowledge Graph", icon: Share2, path: "/graph", roles: STAFF, testId: "nav-graph" },
+  { label: "Data Connector", icon: DatabaseZap, path: "/connector", roles: ["admin"], testId: "nav-connector" },
+  { label: "ตั้งค่า AI", icon: Settings2, path: "/ai-settings", roles: ["admin"], testId: "nav-ai-settings" },
 ];
 
 const COMING_SOON = [
   { label: "เตียงผู้ป่วย", icon: BedDouble },
   { label: "บุคลากร", icon: UserCog },
-  { label: "AI ผู้ช่วยแพทย์", icon: Bot },
   { label: "รายงานวิเคราะห์", icon: BarChart3 },
 ];
 

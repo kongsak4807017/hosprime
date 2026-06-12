@@ -9,15 +9,15 @@ from core.database import db
 DEFAULT_SETTINGS = {
     "provider": "emergent",      # "emergent" (Universal Key) | "custom" (OpenAI-compatible endpoint / local model)
     "llm_provider": "openai",    # for emergent: openai | anthropic | gemini
-    "model": "gpt-5.4",
+    "model": "gpt-5.2",
     "base_url": "",              # for custom e.g. http://localhost:11434/v1 (Ollama) or https://api.openai.com/v1
     "api_key": "",               # for custom
 }
 
 EMERGENT_MODELS = {
-    "openai": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
-    "anthropic": ["claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
-    "gemini": ["gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
+    "openai": ["gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+    "anthropic": ["claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
+    "gemini": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview"],
 }
 
 

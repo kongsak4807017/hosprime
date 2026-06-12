@@ -72,3 +72,91 @@ export const MARITAL_LABELS = {
   divorced: "หย่าร้าง",
   widowed: "หม้าย",
 };
+
+// ---------- Phase 2: Clinical ----------
+
+export const PRESCRIPTION_STATUS_LABELS = {
+  active: "รอจ่ายยา",
+  dispensed: "จ่ายยาแล้ว",
+  cancelled: "ยกเลิก",
+};
+
+export const PRESCRIPTION_STATUS_BADGES = {
+  active: "bg-[#E5A732]/10 text-[#9c7016] border border-[#E5A732]/30",
+  dispensed: "bg-[#327A59]/10 text-[#327A59] border border-[#327A59]/30",
+  cancelled: "bg-[#D34228]/10 text-[#D34228] border border-[#D34228]/30",
+};
+
+export const LAB_STATUS_LABELS = {
+  ordered: "สั่งตรวจแล้ว",
+  sample_collected: "เก็บตัวอย่างแล้ว",
+  in_progress: "กำลังตรวจ",
+  completed: "ผลออกแล้ว",
+  cancelled: "ยกเลิก",
+};
+
+export const LAB_STATUS_BADGES = {
+  ordered: "bg-[#E5A732]/10 text-[#9c7016] border border-[#E5A732]/30",
+  sample_collected: "bg-[#4A6B5D]/15 text-[#2C5A48] border border-[#4A6B5D]/30",
+  in_progress: "bg-[#2E77D0]/10 text-[#2E77D0] border border-[#2E77D0]/30",
+  completed: "bg-[#327A59]/10 text-[#327A59] border border-[#327A59]/30",
+  cancelled: "bg-[#D34228]/10 text-[#D34228] border border-[#D34228]/30",
+};
+
+export const LAB_PRIORITY_LABELS = { routine: "ปกติ", urgent: "เร่งด่วน", stat: "STAT" };
+
+export const LAB_PRIORITY_BADGES = {
+  routine: "bg-[#F2F0EB] text-[#546E62] border border-[#E1E5E2]",
+  urgent: "bg-[#E5A732]/10 text-[#9c7016] border border-[#E5A732]/30",
+  stat: "bg-[#D34228]/10 text-[#D34228] border border-[#D34228]/30",
+};
+
+export const INVOICE_STATUS_LABELS = {
+  pending: "รอชำระ",
+  partially_paid: "ชำระบางส่วน",
+  paid: "ชำระแล้ว",
+  cancelled: "ยกเลิก",
+};
+
+export const INVOICE_STATUS_BADGES = {
+  pending: "bg-[#E5A732]/10 text-[#9c7016] border border-[#E5A732]/30",
+  partially_paid: "bg-[#2E77D0]/10 text-[#2E77D0] border border-[#2E77D0]/30",
+  paid: "bg-[#327A59]/10 text-[#327A59] border border-[#327A59]/30",
+  cancelled: "bg-[#D34228]/10 text-[#D34228] border border-[#D34228]/30",
+};
+
+export const PAYMENT_METHOD_LABELS = {
+  cash: "เงินสด",
+  card: "บัตรเครดิต/เดบิต",
+  transfer: "โอนเงิน",
+  insurance: "ประกัน/สิทธิ",
+};
+
+export const CLAIM_STATUS_LABELS = {
+  submitted: "ยื่นเคลมแล้ว",
+  approved: "อนุมัติ",
+  rejected: "ปฏิเสธ",
+  partially_approved: "อนุมัติบางส่วน",
+};
+
+export const ITEM_TYPE_LABELS = {
+  consultation: "ค่าตรวจรักษา",
+  procedure: "หัตถการ",
+  lab: "ค่าแล็บ",
+  pharmacy: "ค่ายา",
+  bed: "ค่าห้อง/เตียง",
+  other: "อื่นๆ",
+};
+
+export const DRUG_CATEGORIES = [
+  "ยาแก้ปวด",
+  "ยาปฏิชีวนะ",
+  "ยาเบาหวาน",
+  "ยาความดัน",
+  "ยาลดไขมัน",
+  "ยาโรคหัวใจ",
+  "ยาแก้แพ้",
+  "ยาระบบทางเดินอาหาร",
+  "วิตามิน",
+  "อื่นๆ",
+];

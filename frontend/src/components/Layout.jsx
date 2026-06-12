@@ -25,12 +25,12 @@ const MENU = [
   { label: "แดชบอร์ด", icon: LayoutDashboard, path: "/", roles: [...STAFF, "patient"], testId: "nav-dashboard" },
   { label: "ผู้ป่วย", icon: Users, path: "/patients", roles: STAFF, testId: "nav-patients" },
   { label: "นัดหมาย", icon: CalendarClock, path: "/appointments", roles: STAFF, testId: "nav-appointments" },
+  { label: "เภสัชกรรม", icon: Pill, path: "/pharmacy", roles: STAFF, testId: "nav-pharmacy" },
+  { label: "ห้องปฏิบัติการ", icon: FlaskConical, path: "/lab", roles: STAFF, testId: "nav-lab" },
+  { label: "การเงิน & บิล", icon: Receipt, path: "/billing", roles: STAFF, testId: "nav-billing" },
 ];
 
 const COMING_SOON = [
-  { label: "เภสัชกรรม", icon: Pill },
-  { label: "ห้องปฏิบัติการ", icon: FlaskConical },
-  { label: "การเงิน & บิล", icon: Receipt },
   { label: "เตียงผู้ป่วย", icon: BedDouble },
   { label: "บุคลากร", icon: UserCog },
   { label: "AI ผู้ช่วยแพทย์", icon: Bot },

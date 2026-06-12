@@ -32,3 +32,18 @@ export function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+export function formatTHB(n) {
+  return new Intl.NumberFormat("th-TH", {
+    style: "currency",
+    currency: "THB",
+    minimumFractionDigits: 2,
+  }).format(n || 0);
+}
+
+export function isExpiringSoon(dateStr, days = 90) {
+  if (!dateStr) return false;
+  const limit = new Date();
+  limit.setDate(limit.getDate() + days);
+  return new Date(dateStr) <= limit;
+}

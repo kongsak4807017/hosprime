@@ -32,15 +32,25 @@
 - Seed: 10 drugs (Amlodipine low-stock, Amoxicillin expiring ~45d), 2 prescriptions, 3 lab tests, 3 invoices
 - Testing: testing_agent iteration_2 — backend 32/32, frontend 100%; full pytest suite 59/59 at /app/backend/tests/
 
+## Implemented (2026-06-12) — Phase 3 Intelligence Layer ✅ TESTED
+- **AI Core** (`core/ai.py`): switchable provider — Emergent Universal Key (openai/anthropic/gemini via emergentintegrations, default gpt-5.2 VERIFIED; gpt-5.4/5.5 NOT available on key) OR custom OpenAI-compatible endpoint (base_url+api_key+model, supports local Ollama/LM Studio). Settings in db.settings _id=ai
+- **AI Settings** (`routes/ai_settings.py`, `/ai-settings` admin): provider/model config UI, masked keys, test-connection endpoint
+- **Data Connector & Governance Agent** (`routes/connector.py`, `/connector` admin): sources = internal DB + external MongoDB (conn string) + CSV/Excel upload (pandas, 20MB cap, stores first 1000 rows); One-Click Scan = schema discovery (field types, fill rates, max 30 collections, 100-doc samples) + PII/PDPA keyword detection + LLM governance analysis (mapping/PDPA/quality/KG suggestions in Thai markdown)
+- **Knowledge Graph** (`routes/graph_kg.py`, `/graph` staff): build (admin/doctor) from patients/doctors/drugs/conditions/allergens/labtests/departments → kg_nodes/kg_edges (deterministic keys, weighted edges, curated DRUG_INTERACTIONS); interactive react-force-graph-2d viz with type filters + node neighbor panel; Thai NL query → subgraph context → LLM answer
+- **Digital Twin Agents** (`routes/agents.py`, `/agents` staff): 6 หัวหน้างาน personas (director, cmo, head_nurse, head_pharmacy, head_lab, head_finance) each with live DB context builder injected per call; multi-turn sessions (agent_sessions/agent_messages, last-12 history window, user-scoped)
+- Testing: testing_agent iteration_3 — backend 32/32, frontend 100%; pytest test_phase3.py added (~2.5 min, real LLM calls)
+
 ## Backlog / Roadmap
-### P0 — Phase 3: Intelligence Layer (use Emergent LLM Key: available in env)
-- AI Medical Assistant chatbot (LLM, with session ids)
-- AI Drug interaction checker on prescriptions
-- Knowledge graph (medical knowledge queries)
-- Predictive analytics (no-show prediction, risk stratification)
-- Lab report summarization
-### P1 — Phase 4
-- Bed & room management, staff scheduling, advanced reports/exports, patient portal (patient role currently placeholder), MFA, GitHub master product preparation
+### P0 — Phase 4
+- Bed & room management (เตียงผู้ป่วย), staff scheduling (บุคลากร), advanced reports/exports (รายงานวิเคราะห์)
+- Patient portal (patient role currently placeholder)
+- GitHub master product preparation (README, docker, env docs)
+### P1 — Enhancements
+- AI Drug interaction checker inline on prescription creation
+- Auto-invoice from prescriptions + completed labs
+- Lab report AI summarization, no-show prediction
+- Embeddings-based KG query (current: substring match + LLM fallback), context caching for agents (30s)
+- MFA, streaming (SSE) agent replies
 
 ## Known Notes
 - CORS_ORIGINS="*" + credentials: fine same-origin; set explicit origin for production deploy

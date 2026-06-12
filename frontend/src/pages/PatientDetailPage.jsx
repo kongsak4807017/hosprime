@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GENDER_LABELS, MARITAL_LABELS, STATUS_LABELS, STATUS_BADGES } from "@/lib/constants";
 import { calcAge, formatThaiDate, formatThaiDateTime } from "@/lib/helpers";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 
 const inputCls =
@@ -239,6 +239,7 @@ export default function PatientDetailPage() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle className="font-heading">บันทึกสัญญาณชีพ</DialogTitle>
+                      <DialogDescription>กรอกค่าที่วัดได้ ช่องที่ไม่ได้วัดเว้นว่างได้</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submitVitals} className="grid grid-cols-2 gap-3" data-testid="vitals-form">
                       <div>

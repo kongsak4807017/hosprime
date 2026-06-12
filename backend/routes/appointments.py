@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -78,10 +79,11 @@ async def list_appointments(
     if status:
         query["status"] = status
     if search:
+        safe = re.escape(search)
         query["$or"] = [
-            {"patient_name": {"$regex": search, "$options": "i"}},
-            {"appointment_number": {"$regex": search, "$options": "i"}},
-            {"doctor_name": {"$regex": search, "$options": "i"}},
+            {"patient_name": {"$regex": safe, "$options": "i"}},
+            {"appointment_number": {"$regex": safe, "$options": "i"}},
+            {"doctor_name": {"$regex": safe, "$options": "i"}},
         ]
     total = await db.appointments.count_documents(query)
     items = (

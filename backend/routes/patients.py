@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -45,12 +46,13 @@ async def list_patients(
 ):
     query = {"is_active": True}
     if search:
+        safe = re.escape(search)
         query["$or"] = [
-            {"first_name": {"$regex": search, "$options": "i"}},
-            {"last_name": {"$regex": search, "$options": "i"}},
-            {"patient_number": {"$regex": search, "$options": "i"}},
-            {"phone": {"$regex": search, "$options": "i"}},
-            {"national_id": {"$regex": search, "$options": "i"}},
+            {"first_name": {"$regex": safe, "$options": "i"}},
+            {"last_name": {"$regex": safe, "$options": "i"}},
+            {"patient_number": {"$regex": safe, "$options": "i"}},
+            {"phone": {"$regex": safe, "$options": "i"}},
+            {"national_id": {"$regex": safe, "$options": "i"}},
         ]
     if gender:
         query["gender"] = gender

@@ -8,7 +8,7 @@ import {
 } from "@/lib/constants";
 import { formatThaiDate, todayStr } from "@/lib/helpers";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -120,6 +120,7 @@ export default function AppointmentsPage() {
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="font-heading">จองนัดหมายใหม่</DialogTitle>
+                <DialogDescription>เลือกผู้ป่วย แพทย์ และเวลานัดหมาย</DialogDescription>
               </DialogHeader>
               <form onSubmit={submit} className="space-y-3" data-testid="appointment-form">
                 <div>
@@ -127,7 +128,7 @@ export default function AppointmentsPage() {
                   <select required value={form.patient_id} onChange={(e) => set("patient_id", e.target.value)} className={inputCls} data-testid="appointment-patient-select">
                     <option value="">เลือกผู้ป่วย</option>
                     {patients.map((p) => (
-                      <option key={p.id} value={p.id}>{p.patient_number} — {p.first_name} {p.last_name}</option>
+                      <option key={p.id} value={p.id}>{`${p.patient_number} — ${p.first_name} ${p.last_name}`}</option>
                     ))}
                   </select>
                 </div>
@@ -136,7 +137,7 @@ export default function AppointmentsPage() {
                   <select required value={form.doctor_id} onChange={(e) => handleDoctorChange(e.target.value)} className={inputCls} data-testid="appointment-doctor-select">
                     <option value="">เลือกแพทย์</option>
                     {doctors.map((d) => (
-                      <option key={d.id} value={d.id}>{d.full_name} ({d.department})</option>
+                      <option key={d.id} value={d.id}>{`${d.full_name} (${d.department})`}</option>
                     ))}
                   </select>
                 </div>

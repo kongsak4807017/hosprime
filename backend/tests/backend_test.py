@@ -2,6 +2,7 @@
 HosPRIME Backend Tests
 Covers: Auth, RBAC, Patients CRUD, Appointments, Dashboard
 """
+import random
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -249,13 +250,14 @@ class TestAppointments:
         patients = admin_sess.get(f"{API}/patients", timeout=10).json()["items"]
         doctors = admin_sess.get(f"{API}/appointments/doctors", timeout=10).json()
         assert patients and doctors
-        future = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d")
+        future = (datetime.now(timezone.utc) + timedelta(days=random.randint(30, 365))).strftime("%Y-%m-%d")
+        slot = f"{random.randint(8, 16):02d}:{random.choice(['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'])}"
         payload = {
             "patient_id": patients[0]["id"],
             "doctor_id": doctors[0]["id"],
             "department": doctors[0].get("department", ""),
             "appointment_date": future,
-            "appointment_time": "10:00",
+            "appointment_time": slot,
             "reason": "TEST appointment"
         }
         r = admin_sess.post(f"{API}/appointments", json=payload, timeout=10)

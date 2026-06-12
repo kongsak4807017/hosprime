@@ -13,10 +13,14 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core.database import client
 from core.seed import seed_all
+from routes.agents import router as agents_router
+from routes.ai_settings import router as ai_settings_router
 from routes.appointments import router as appointments_router
 from routes.auth import router as auth_router
 from routes.billing import router as billing_router
+from routes.connector import router as connector_router
 from routes.dashboard import router as dashboard_router
+from routes.graph_kg import router as graph_router
 from routes.lab import router as lab_router
 from routes.patients import router as patients_router
 from routes.pharmacy import router as pharmacy_router
@@ -44,6 +48,10 @@ api_router.include_router(dashboard_router)
 api_router.include_router(pharmacy_router)
 api_router.include_router(lab_router)
 api_router.include_router(billing_router)
+api_router.include_router(ai_settings_router)
+api_router.include_router(connector_router)
+api_router.include_router(graph_router)
+api_router.include_router(agents_router)
 
 app.include_router(api_router)
 

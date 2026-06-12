@@ -1,0 +1,88 @@
+{
+  "theme": "light",
+  "archetype": "1_organic_earthy",
+  "fonts": {
+    "heading": "Prompt, sans-serif",
+    "body": "IBM Plex Sans Thai, sans-serif",
+    "mono": "JetBrains Mono, monospace"
+  },
+  "colors": {
+    "background": "#F9F9F8",
+    "surface": "#FFFFFF",
+    "surface_subtle": "#F2F0EB",
+    "primary": "#1E3F33",
+    "primary_hover": "#2C5A48",
+    "secondary": "#4A6B5D",
+    "accent_sage": "#D1D9D3",
+    "accent_terracotta": "#CC5A3A",
+    "text_main": "#0F1F19",
+    "text_muted": "#546E62",
+    "border": "#E1E5E2",
+    "success": "#327A59",
+    "warning": "#E5A732",
+    "error": "#D34228",
+    "info": "#2E77D0"
+  },
+  "spacing": {
+    "container_padding": "p-6 md:p-8",
+    "section_gap": "gap-8 md:gap-12",
+    "widget_gap": "gap-4 md:gap-6",
+    "border_radius": "rounded-lg"
+  },
+  "typography": {
+    "h1": "text-4xl sm:text-5xl font-medium tracking-tight leading-none text-[#0F1F19]",
+    "h2": "text-2xl sm:text-3xl font-medium tracking-tight text-[#0F1F19]",
+    "h3": "text-xl sm:text-2xl font-medium text-[#0F1F19]",
+    "h4": "text-lg sm:text-xl font-medium text-[#0F1F19]",
+    "body": "text-base leading-relaxed text-[#0F1F19]",
+    "small_label": "text-xs font-semibold uppercase tracking-[0.2em] text-[#546E62]"
+  },
+  "surfaces": {
+    "header": "bg-[#F9F9F8]/90 backdrop-blur-md border-b border-[#E1E5E2] z-50 sticky top-0",
+    "sidebar": "bg-[#F2F0EB] border-r border-[#E1E5E2]",
+    "card": "bg-white border border-[#E1E5E2] rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200",
+    "patient_row": "border-b border-[#E1E5E2] hover:bg-[#F2F0EB]/50 transition-colors duration-200"
+  },
+  "components": {
+    "button_primary": "bg-[#1E3F33] text-white hover:bg-[#2C5A48] rounded-lg px-6 py-2.5 font-medium transition-colors focus:ring-2 focus:ring-[#4A6B5D] focus:outline-none",
+    "button_secondary": "bg-[#F2F0EB] text-[#0F1F19] hover:bg-[#E1E5E2] rounded-lg px-6 py-2.5 font-medium transition-colors border border-[#E1E5E2]",
+    "input": "w-full border border-[#E1E5E2] bg-white rounded-lg px-4 py-2.5 text-[#0F1F19] placeholder:text-[#546E62] focus:border-[#1E3F33] focus:ring-1 focus:ring-[#1E3F33] transition-all",
+    "badge_scheduled": "bg-[#E5A732]/10 text-[#E5A732] border border-[#E5A732]/20 rounded-full px-3 py-1 text-xs font-medium",
+    "badge_inprogress": "bg-[#2E77D0]/10 text-[#2E77D0] border border-[#2E77D0]/20 rounded-full px-3 py-1 text-xs font-medium",
+    "badge_completed": "bg-[#327A59]/10 text-[#327A59] border border-[#327A59]/20 rounded-full px-3 py-1 text-xs font-medium",
+    "status_checkedin": "bg-[#4A6B5D]/10 text-[#4A6B5D] border border-[#4A6B5D]/20 rounded-full px-3 py-1 text-xs font-medium"
+  },
+  "layout_grids": {
+    "dashboard_kpis": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "dashboard_charts": "col-span-1 md:col-span-2 lg:col-span-3",
+    "patient_detail_bento": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "patient_detail_hero": "col-span-full md:col-span-8",
+    "patient_detail_sidebar": "col-span-full md:col-span-4"
+  },
+  "icons_library": "@phosphor-icons/react",
+  "testing_attributes": {
+    "login_submit": "data-testid='login-submit-btn'",
+    "patient_search": "data-testid='patient-search-input'",
+    "patient_row": "data-testid='patient-list-row'",
+    "appointment_book": "data-testid='appointment-book-btn'"
+  },
+  "image_urls": {
+    "login_background": {
+      "url": "https://images.unsplash.com/photo-1719934398679-d764c1410770?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwyfHxob3NwaXRhbCUyMGFyY2hpdGVjdHVyZSUyMGJ1aWxkaW5nJTIwbW9kZXJufGVufDB8fHx8MTc4MTI3NTI5NXww&ixlib=rb-4.1.0&q=85",
+      "description": "Modern hospital architecture interior, clean bright hallway."
+    },
+    "placeholder_doctor": {
+      "url": "https://images.unsplash.com/photo-1659989693409-5adc97274bed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwzfHxkb2N0b3IlMjBwYXRpZW50JTIwY29uc3VsdGF0aW9uJTIwZnJpZW5kbHl8ZW58MHx8fHwxNzgxMjc1Mjk1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Friendly doctor consultation, used for empty states or default avatars."
+    }
+  },
+  "instructions_to_main_agent": [
+    "This is an Enterprise Hospital Management system for Thai users. Do NOT use generic SaaS Blue. Stick to the Deep Forest Green and Bone White Earthy/Organic palette.",
+    "Implement pure HTML/Tailwind for structural layout components to achieve tight 'Control Room' grids. Use Shadcn components specifically for complex interactions (Tables, Modals, Forms, Select).",
+    "Avoid Glassmorphism on clinical data screens (Patient EHR, Dashboards). Use Flat Solid surfaces with 1px border. Refraction of data is forbidden. Glassmorphism can be used ONLY on the sticky header.",
+    "Data readability is the top priority. Use IBM Plex Sans Thai for body copy and data tables, and Prompt for Headings. Add these via Google Fonts.",
+    "Always include data-testid on interactive elements for QA.",
+    "Implement role-based sidebar menus that visibly toggle based on the 7 RBAC roles. Label unavailable modules as 'Coming Soon'.",
+    "Appointment Statuses must be color-coded distinctively (Scheduled=Warning, CheckedIn=Secondary, InProgress=Info, Completed=Success)."
+  ]
+}

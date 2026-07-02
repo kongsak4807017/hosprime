@@ -20,6 +20,8 @@ from routes.auth import router as auth_router
 from routes.billing import router as billing_router
 from routes.connector import router as connector_router
 from routes.dashboard import router as dashboard_router
+from routes.documents import router as documents_router
+from routes.executive_office import router as executive_office_router
 from routes.graph_kg import router as graph_router
 from routes.lab import router as lab_router
 from routes.patients import router as patients_router
@@ -31,17 +33,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="HosPRIME API", version="1.0.0")
+app = FastAPI(
+    title="HosPRIME API",
+    version="1.1.0",
+    description="Health Organization Operating System and Executive AI Office",
+)
 
 api_router = APIRouter(prefix="/api")
 
 
 @api_router.get("/")
 async def root():
-    return {"message": "HosPRIME API", "version": "1.0.0", "status": "operational"}
+    return {
+        "message": "HosPRIME API",
+        "version": "1.1.0",
+        "status": "operational",
+        "product": "Health Organization Operating System",
+    }
 
 
 api_router.include_router(auth_router)
+api_router.include_router(executive_office_router)
+api_router.include_router(documents_router)
 api_router.include_router(patients_router)
 api_router.include_router(appointments_router)
 api_router.include_router(dashboard_router)

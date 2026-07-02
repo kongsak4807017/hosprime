@@ -1,0 +1,879 @@
+ดีครับ
+
+ตอนนี้ PRD, Data Mart, Agent Layer เริ่มล็อกแล้ว
+
+ไฟล์ 04 จะเป็นเอกสารที่ Architect ใช้สร้างระบบจริง และเป็นตัวเชื่อมทุกอย่างเข้าด้วยกัน
+
+จุดสำคัญคือ ผมจะไม่ออกแบบแบบ SaaS ทั่วไป
+
+แต่จะออกแบบเป็น
+
+> Sovereign Hospital AI Platform
+
+รองรับ
+
+- รพช.
+- รพท.
+- รพศ.
+- สสจ.
+- เขตสุขภาพ
+- MOPH
+
+และรองรับ Local AI + Federated Intelligence ตั้งแต่วันแรก
+
+---
+
+:::writing{variant="document" id="41862"}
+# 04_PRODUCTION_ARCHITECTURE.md
+
+# Hospital Intelligence Operating System (HIOS)
+
+## Production Architecture Specification
+
+Version: 0.1
+
+Status: Production Architecture Design
+
+---
+
+# 1. Purpose
+
+This document defines the production architecture for HIOS.
+
+The architecture must support:
+
+- On-Premise Deployment
+- Local AI Inference
+- Hospital Sovereignty
+- Multi-Agent Orchestration
+- Digital Twin
+- Knowledge Graph
+- Population Intelligence
+
+while maintaining:
+
+- PDPA Compliance
+- Cybersecurity Compliance
+- High Availability
+- Operational Resilience
+
+---
+
+# 2. Architecture Principles
+
+## Principle 1
+
+AI Must Come To Data
+
+Data Must Not Leave Hospital
+
+---
+
+## Principle 2
+
+Read-Only Integration First
+
+No direct modification of HIS data.
+
+---
+
+## Principle 3
+
+Single Source of Truth
+
+All agents consume information from:
+
+Management Data Mart
+
+Only.
+
+---
+
+## Principle 4
+
+Explainability First
+
+Every AI recommendation must be traceable.
+
+---
+
+## Principle 5
+
+Human Governance
+
+AI recommends.
+
+Human approves.
+
+---
+
+# 3. Enterprise Architecture Overview
+
+```text
+┌────────────────────────────┐
+│      User Experience       │
+│                            │
+│ Situation Room             │
+│ Hospital Twin              │
+│ AI Council                 │
+│ Decision Theater           │
+│ Knowledge Universe         │
+│ Population Twin            │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│     Agent Orchestrator     │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│    AI Intelligence Layer   │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│      Semantic Layer        │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Management Data Mart       │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Integration & Connectors   │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Source Systems             │
+└────────────────────────────┘
+```
+
+---
+
+# 4. Architecture Layers
+
+HIOS consists of 8 production layers.
+
+---
+
+# Layer 01
+
+Source Systems Layer
+
+Purpose:
+
+System of Record
+
+Examples:
+
+- HOSxP
+- LIS
+- PACS
+- ERP
+- HR
+- Inventory
+- Refer System
+
+Characteristics:
+
+Read Only
+
+No AI Access
+
+---
+
+# Layer 02
+
+Integration Layer
+
+Purpose:
+
+Collect data from source systems.
+
+Components:
+
+- CDC
+- ETL
+- API Gateway
+- File Import
+
+Supported Methods:
+
+- Database Replication
+- REST API
+- HL7
+- FHIR
+- CSV
+- Excel
+
+---
+
+# Layer 03
+
+Data Platform Layer
+
+Purpose:
+
+Enterprise Data Foundation
+
+Components:
+
+- Staging Database
+- Data Quality Engine
+- Data Mart
+
+Outputs:
+
+Trusted Data
+
+Single Source of Truth
+
+---
+
+# Layer 04
+
+Semantic Intelligence Layer
+
+Purpose:
+
+Convert data into meaning.
+
+Example:
+
+Raw Data
+
+```sql
+visit_count=1524
+```
+
+Semantic Meaning
+
+```text
+OPD utilization is above expected threshold.
+```
+
+Components:
+
+- Metric Catalog
+- KPI Catalog
+- Business Glossary
+- Service Mapping
+
+---
+
+# Layer 05
+
+Knowledge Layer
+
+Purpose:
+
+Organizational Understanding
+
+Components:
+
+- Knowledge Graph
+- SOP Repository
+- Policy Repository
+- Lessons Learned
+- Meeting Memory
+
+Knowledge Sources:
+
+- Policies
+- Guidelines
+- Research
+- Reports
+- Decisions
+
+---
+
+# Layer 06
+
+AI Intelligence Layer
+
+Purpose:
+
+Reasoning and Forecasting
+
+Components:
+
+- LLM Runtime
+- Embedding Service
+- Forecast Engine
+- Recommendation Engine
+- Risk Engine
+
+Capabilities:
+
+- Q&A
+- Summarization
+- Prediction
+- Classification
+- Recommendation
+
+---
+
+# Layer 07
+
+Agent Orchestration Layer
+
+Purpose:
+
+Coordinate AI Agents
+
+Components:
+
+- Agent Registry
+- Workflow Engine
+- Task Engine
+- Escalation Engine
+- Agent Communication Bus
+
+Responsibilities:
+
+- Agent Routing
+- Agent Collaboration
+- Agent Scheduling
+
+---
+
+# Layer 08
+
+Experience Layer
+
+Purpose:
+
+User Interaction
+
+Applications:
+
+- Situation Room
+- Hospital Twin
+- AI Council
+- Decision Theater
+- Population Twin
+- Mobile App
+- Executive Brief
+
+---
+
+# 5. AI Infrastructure Architecture
+
+## Small Hospital
+
+30–60 Beds
+
+Deployment Model:
+
+Single Node
+
+```text
+1 AI Server
+1 Database Server
+```
+
+Suggested Hardware
+
+CPU:
+
+32 Core
+
+RAM:
+
+128 GB
+
+GPU:
+
+1 × RTX 6000 Ada
+
+Storage:
+
+8 TB SSD
+
+---
+
+## Medium Hospital
+
+60–200 Beds
+
+Deployment Model
+
+Dual Node
+
+```text
+AI Cluster
+Data Cluster
+```
+
+GPU
+
+2–4 GPUs
+
+RAM
+
+256 GB
+
+Storage
+
+20 TB
+
+---
+
+## Regional Hospital
+
+200–1000 Beds
+
+Deployment Model
+
+Multi Node
+
+GPU Cluster
+
+Dedicated Storage Cluster
+
+---
+
+# 6. DGX Spark Architecture
+
+Purpose:
+
+Executive AI
+
+Agent Runtime
+
+Knowledge Graph Query
+
+Forecasting
+
+Decision Support
+
+---
+
+Recommended Usage
+
+NOT
+
+Raw database analytics
+
+YES
+
+Executive reasoning
+
+Agent collaboration
+
+Scenario simulation
+
+Strategic forecasting
+
+---
+
+# 7. LLM Runtime Architecture
+
+Primary Runtime
+
+vLLM
+
+---
+
+Secondary Runtime
+
+Ollama
+
+---
+
+Enterprise Runtime
+
+NVIDIA NIM
+
+---
+
+Supported Models
+
+Llama
+
+Qwen
+
+Mistral
+
+DeepSeek
+
+Healthcare Fine-Tuned Models
+
+---
+
+# 8. Multi-Agent Runtime
+
+Architecture
+
+```text
+Executive Brain
+        │
+        ▼
+AI Council
+        │
+ ┌──────┼──────┐
+ ▼      ▼      ▼
+CFO    COO    CMO
+```
+
+---
+
+Communication Method
+
+Agent Message Bus
+
+Message Types
+
+- Observation
+- Recommendation
+- Warning
+- Escalation
+- Task
+
+---
+
+# 9. Hospital Twin Runtime
+
+Purpose:
+
+Real-time operational visualization
+
+Entities
+
+- ER
+- OPD
+- IPD
+- OR
+- ICU
+- Pharmacy
+- Finance
+
+Update Interval
+
+5 Minutes
+
+---
+
+# 10. Population Twin Runtime
+
+Purpose:
+
+Population Intelligence
+
+Sources:
+
+- HDC
+- NHSO
+- Surveillance Systems
+- GIS
+- Census
+
+Capabilities:
+
+- Disease Forecast
+- Service Demand Forecast
+- Resource Planning
+
+---
+
+# 11. Knowledge Graph Architecture
+
+Graph Database
+
+Preferred:
+
+Neo4j
+
+Alternative:
+
+Apache AGE
+
+---
+
+Node Types
+
+- Person
+- Department
+- Program
+- KPI
+- Policy
+- SOP
+- Project
+
+Relationship Types
+
+- owns
+- contributes_to
+- affects
+- reports_to
+- supports
+
+---
+
+# 12. Vector Knowledge Architecture
+
+Purpose:
+
+RAG
+
+Storage:
+
+Qdrant
+
+Alternative:
+
+pgvector
+
+Sources:
+
+- SOP
+- Policy
+- Meeting Notes
+- Reports
+- Research
+
+---
+
+# 13. Forecast Engine Architecture
+
+Models
+
+Operational Forecast
+
+Financial Forecast
+
+Population Forecast
+
+Workforce Forecast
+
+Supply Chain Forecast
+
+---
+
+Forecast Horizon
+
+7 Days
+
+30 Days
+
+90 Days
+
+1 Year
+
+5 Years
+
+10 Years
+
+---
+
+# 14. Workflow Architecture
+
+Workflow Engine
+
+Preferred:
+
+Temporal
+
+Alternative:
+
+Camunda
+
+---
+
+Examples
+
+Bed Occupancy > 95%
+
+↓
+
+COO Agent
+
+↓
+
+Task Creation
+
+↓
+
+Approval
+
+↓
+
+Execution
+
+↓
+
+Follow Up
+
+---
+
+# 15. Security Architecture
+
+Core Principles
+
+Zero Trust
+
+Least Privilege
+
+Defense In Depth
+
+---
+
+Components
+
+- IAM
+- MFA
+- Audit Log
+- Encryption
+- Secrets Vault
+
+---
+
+# 16. Federated Health Intelligence Architecture
+
+Purpose
+
+Connect hospitals without sharing raw patient data.
+
+Architecture
+
+```text
+Hospital A
+     │
+Hospital B
+     │
+Hospital C
+     │
+Provincial Node
+     │
+Regional Node
+```
+
+Only:
+
+Aggregated Metrics
+
+Knowledge Artifacts
+
+AI Insights
+
+are shared.
+
+Patient-Level Data remains local.
+
+---
+
+# 17. High Availability
+
+Target
+
+99.9%
+
+---
+
+Components
+
+Load Balancer
+
+Database Replication
+
+Backup Server
+
+Disaster Recovery Site
+
+---
+
+# 18. Observability Architecture
+
+Monitoring
+
+Prometheus
+
+---
+
+Visualization
+
+Grafana
+
+---
+
+Logs
+
+Loki
+
+---
+
+Audit
+
+OpenSearch
+
+---
+
+# 19. Future Architecture
+
+Phase 1
+
+Hospital Intelligence
+
+---
+
+Phase 2
+
+Autonomous Hospital
+
+---
+
+Phase 3
+
+Provincial Health Brain
+
+---
+
+Phase 4
+
+Regional Health Brain
+
+---
+
+Phase 5
+
+National Healthcare Intelligence Grid
+
+---
+
+END OF DOCUMENT
+:::
+
+## สถานะปัจจุบัน
+
+✅ 01_PRD_HIOS.md  
+✅ 05_DATA_REQUIREMENT_AND_DATAMART.md  
+✅ 03_MODULE_AGENT_SPEC.md  
+✅ 04_PRODUCTION_ARCHITECTURE.md
+
+ไฟล์ถัดไปที่ควรทำคือ
+
+**02_TECH_STACK.md**
+
+ซึ่งจะลงลึกระดับ Engineering จริง ๆ เช่น
+
+- Frontend Framework
+- Backend Framework
+- Agent Framework
+- Graph Database
+- Data Warehouse
+- Vector Database
+- Kubernetes Topology
+- DGX Spark Sizing
+- Neo4j Schema
+- ClickHouse Schema
+- FastAPI Microservices
+- MCP Architecture
+- LangGraph / CrewAI / OpenAI Agent SDK / Semantic Kernel เปรียบเทียบ
+- GitOps / CI-CD
+- DevSecOps
+
+และจะเป็นเอกสารที่ทีม Engineering ใช้สร้างระบบจริงได้เลย.

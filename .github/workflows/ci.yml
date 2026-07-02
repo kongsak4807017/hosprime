@@ -32,6 +32,16 @@ jobs:
         run: python -m compileall -q backend
       - name: Run governance safety tests
         run: pytest backend/tests/test_governance_safety.py -vv --tb=short
+      - name: Import configuration and persistence
+        run: python -c "from backend.app.core.config import settings; from backend.app.db import models; print(settings.APP_NAME)"
+      - name: Import identity and knowledge endpoints
+        run: python -c "from backend.app import auth; from backend.app.api.endpoints import documents, oracle, admin; print('knowledge imports ok')"
+      - name: Import memory and twin endpoints
+        run: python -c "from backend.app.api.endpoints import meetings, twins, graph; print('memory imports ok')"
+      - name: Import workflow and HITL endpoints
+        run: python -c "from backend.app.api.endpoints import workflows, hitl; print('workflow imports ok')"
+      - name: Import API router
+        run: python -c "from backend.app.api.router import api_router; print(len(api_router.routes))"
       - name: Import application
         run: python -c "from backend.app.main import app; print(app.title)"
 

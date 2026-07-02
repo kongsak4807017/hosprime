@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from backend.app.agents.agents import KnowledgeIngestionAgent
@@ -96,7 +96,7 @@ def get_catalog(
     document_type: Optional[str] = None,
     department: Optional[str] = None,
     program: Optional[str] = None,
-    status_value: Optional[str] = None,
+    status_value: Optional[str] = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Document)

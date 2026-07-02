@@ -1,131 +1,173 @@
 import json
 import logging
-from typing import List, Optional
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+from backend.app.auth import get_current_user
+from backend.app.db.models import AuditLog, HITLQueue, User, WorkflowRun
 from backend.app.db.session import get_db
-from backend.app.db.models import HITLQueue, AuditLog
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+def _safe_json(value: str | None) -> dict:
+    if not value:
+        return {}
+    try:
+        result = json.loads(value)
+        return result if isinstance(result, dict) else {"value": result}
+    except json.JSONDecodeError:
+        return {"unparsed": True}
+
+
 @router.get("/queue")
 def get_hitl_queue(
-    status: str = Query(default="pending"),
-    db: Session = Depends(get_db)
+    status_value: str = Query(default="pending", alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    ดึงรายการที่กำลังรอการตรวจสอบหรืออนุมัติจากมนุษย์ (HITL Queue)
-    """
-    try:
-        queue_items = db.query(HITLQueue).filter(HITLQueue.status == status).order_by(HITLQueue.requested_at.desc()).all()
-        result = []
-        for item in queue_items:
-            result.append({
-                "id": item.id,
-                "workflow_id": item.workflow_id,
-                "task_id": item.task_id,
-                "agent_id": item.agent_id,
-                "status": item.status,
-                "requested_at": item.requested_at.isoformat() if item.requested_at else None,
-                "payload": json.loads(item.payload) if item.payload else {},
-                "context": json.loads(item.context) if item.context else {}
-            })
-        return result
-    except Exception as e:
-        logger.error(f"Failed to fetch HITL queue: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch HITL queue: {str(e)}")
+    items = (
+        db.query(HITLQueue)
+        .filter(HITLQueue.status == status_value)
+        .order_by(HITLQueue.requested_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": item.id,
+            "workflow_id": item.workflow_id,
+            "task_id": item.task_id,
+            "agent_id": item.agent_id,
+            "status": item.status,
+            "requested_at": (
+                item.requested_at.isoformat() if item.requested_at else None
+            ),
+            "payload": _safe_json(item.payload),
+            "context": _safe_json(item.context),
+        }
+        for item in items
+    ]
+
 
 @router.post("/approve/{queue_id}")
 def approve_hitl_task(
     queue_id: int,
-    approved_by: Optional[str] = Query(default="admin"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    อนุมัติขั้นตอนงานที่รออยู่ในคิว
-    """
     item = db.query(HITLQueue).filter(HITLQueue.id == queue_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="HITL task not found")
-        
     if item.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Task is already {item.status}")
+        raise HTTPException(status_code=409, detail=f"Task is already {item.status}")
 
     try:
-        import datetime
+        approval_token = f"APR-{uuid4().hex}"
         item.status = "approved"
-        item.approved_by = approved_by
-        item.approved_at = datetime.datetime.now()
-        item.approval_token = f"TOKEN-{item.workflow_id}-{int(datetime.datetime.now().timestamp())}"
-        
-        # บันทึกลง Audit Log
-        audit = AuditLog(
-            agent_id=item.agent_id,
-            workflow_id=item.workflow_id,
-            user_id=approved_by,
-            action_type="hitl_approved",
-            input_data=item.payload,
-            output_data=json.dumps({"status": "approved", "token": item.approval_token}),
-            tools_used=json.dumps(["hitl_gateway"]),
-            decisions=json.dumps({"hitl_decision": "approved"}),
-            approval_token=item.approval_token
+        item.approved_by = current_user.username
+        item.approved_at = datetime.now(timezone.utc)
+        item.approval_token = approval_token
+
+        workflow = None
+        if item.workflow_id.isdigit():
+            workflow = (
+                db.query(WorkflowRun)
+                .filter(WorkflowRun.id == int(item.workflow_id))
+                .first()
+            )
+        if workflow and workflow.status == "PENDING_APPROVAL":
+            workflow.status = "APPROVED_NOT_EXECUTED"
+            workflow.current_step = "Awaiting configured and authorized executor"
+
+        db.add(
+            AuditLog(
+                agent_id=item.agent_id,
+                workflow_id=item.workflow_id,
+                user_id=current_user.username,
+                action_type="hitl_plan_approved",
+                input_data=item.payload,
+                output_data=json.dumps(
+                    {
+                        "status": "approved",
+                        "external_actions_executed": False,
+                    }
+                ),
+                tools_used=json.dumps(["hitl_gateway"]),
+                decisions=json.dumps(
+                    {
+                        "plan_approved": True,
+                        "execution_authorized": False,
+                    }
+                ),
+                approval_token=approval_token,
+            )
         )
-        db.add(audit)
         db.commit()
-        
         return {
-            "status": "success",
-            "message": "Task approved successfully",
-            "approval_token": item.approval_token
+            "status": "approved_not_executed",
+            "message": "Plan approved; no external action was executed.",
+            "approval_token": approval_token,
         }
-    except Exception as e:
+    except Exception as exc:
         db.rollback()
-        logger.error(f"Failed to approve task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to approve HITL task: %s", exc)
+        raise HTTPException(status_code=500, detail="HITL approval failed") from exc
+
 
 @router.post("/reject/{queue_id}")
 def reject_hitl_task(
     queue_id: int,
-    rejected_by: Optional[str] = Query(default="admin"),
-    reason: Optional[str] = Query(default="Rejected by user"),
-    db: Session = Depends(get_db)
+    reason: str = Query(default="Rejected by reviewer", min_length=3, max_length=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    ปฏิเสธขั้นตอนงานที่รออยู่ในคิว
-    """
     item = db.query(HITLQueue).filter(HITLQueue.id == queue_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="HITL task not found")
-        
     if item.status != "pending":
-        raise HTTPException(status_code=400, detail=f"Task is already {item.status}")
+        raise HTTPException(status_code=409, detail=f"Task is already {item.status}")
 
     try:
-        import datetime
         item.status = "rejected"
-        item.approved_by = rejected_by
-        item.approved_at = datetime.datetime.now()
-        
-        # บันทึกลง Audit Log
-        audit = AuditLog(
-            agent_id=item.agent_id,
-            workflow_id=item.workflow_id,
-            user_id=rejected_by,
-            action_type="hitl_rejected",
-            input_data=item.payload,
-            output_data=json.dumps({"status": "rejected", "reason": reason}),
-            tools_used=json.dumps(["hitl_gateway"]),
-            decisions=json.dumps({"hitl_decision": "rejected", "reason": reason})
+        item.approved_by = current_user.username
+        item.approved_at = datetime.now(timezone.utc)
+
+        workflow = None
+        if item.workflow_id.isdigit():
+            workflow = (
+                db.query(WorkflowRun)
+                .filter(WorkflowRun.id == int(item.workflow_id))
+                .first()
+            )
+        if workflow and workflow.status == "PENDING_APPROVAL":
+            workflow.status = "REJECTED"
+            workflow.current_step = "Plan rejected by human reviewer"
+
+        db.add(
+            AuditLog(
+                agent_id=item.agent_id,
+                workflow_id=item.workflow_id,
+                user_id=current_user.username,
+                action_type="hitl_plan_rejected",
+                input_data=item.payload,
+                output_data=json.dumps({"status": "rejected", "reason": reason}),
+                tools_used=json.dumps(["hitl_gateway"]),
+                decisions=json.dumps(
+                    {
+                        "plan_approved": False,
+                        "reason": reason,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
         )
-        db.add(audit)
         db.commit()
-        
-        return {
-            "status": "success",
-            "message": "Task rejected successfully"
-        }
-    except Exception as e:
+        return {"status": "rejected", "message": "Plan rejected."}
+    except Exception as exc:
         db.rollback()
-        logger.error(f"Failed to reject task: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to reject HITL task: %s", exc)
+        raise HTTPException(status_code=500, detail="HITL rejection failed") from exc

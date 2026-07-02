@@ -1,15 +1,17 @@
-import os
 import json
-import time
 import logging
-from typing import Dict, Any, Optional, Tuple
+import time
+from typing import Any, Dict, Optional, Tuple
+
 from sqlalchemy.orm import Session
+
 from backend.app.core.config import settings
 from backend.app.db.models import CostLog
 from backend.app.models.twin_models import Agent
-from backend.app.services.gemini_service import GeminiService
+from backend.app.services.gemini_service import AIProviderUnavailable, GeminiService
 
 logger = logging.getLogger(__name__)
+
 
 class CircuitBreaker:
     def __init__(self, failure_threshold: int = 3, recovery_time: float = 60.0):
@@ -17,30 +19,34 @@ class CircuitBreaker:
         self.recovery_time = recovery_time
         self.failure_count = 0
         self.last_failure_time = 0.0
-        self.state = "CLOSED" # CLOSED, OPEN, HALF-OPEN
+        self.state = "CLOSED"
 
-    def record_success(self):
+    def record_success(self) -> None:
         self.failure_count = 0
         self.state = "CLOSED"
 
-    def record_failure(self):
+    def record_failure(self) -> None:
         self.failure_count += 1
         self.last_failure_time = time.time()
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
-            logger.warning(f"Circuit breaker state changed to OPEN. Temporary block for {self.recovery_time}s")
 
     def allow_request(self) -> bool:
-        if self.state == "OPEN":
-            if time.time() - self.last_failure_time > self.recovery_time:
-                self.state = "HALF-OPEN"
-                logger.info("Circuit breaker state changed to HALF-OPEN. Attempting recovery request.")
-                return True
-            return False
-        return True
+        if self.state != "OPEN":
+            return True
+        if time.time() - self.last_failure_time > self.recovery_time:
+            self.state = "HALF_OPEN"
+            return True
+        return False
 
 
 class AIGateway:
+    """Governed AI gateway.
+
+    The gateway records the provider actually used. It never labels a Gemini
+    response as OpenAI, Anthropic, DeepSeek, or a local model.
+    """
+
     _breakers: Dict[str, CircuitBreaker] = {}
 
     @classmethod
@@ -51,19 +57,24 @@ class AIGateway:
 
     @classmethod
     def _map_agent_role(cls, agent_id: str) -> Optional[str]:
-        """แมป agent_id หรือชื่อคลาสของเอเจนต์เข้ากับ role ในระบบ Token Economy (agent_twin)"""
         if not agent_id:
             return None
-        
         agent_id_lower = agent_id.lower()
-        
-        # 1. เช็คว่ามีคำสำคัญตรงกับบทบาทหลักของเอเจนต์ในบอร์ดกำกับดูแลหรือไม่
-        roles = ["executive", "cos", "analyst", "knowledge", "report", "meeting", "datagov", "cfo", "coo", "provincial"]
+        roles = [
+            "executive",
+            "cos",
+            "analyst",
+            "knowledge",
+            "report",
+            "meeting",
+            "datagov",
+            "cfo",
+            "coo",
+            "provincial",
+        ]
         for role in roles:
             if role in agent_id_lower:
                 return role
-                
-        # 2. แมปชื่อคลาสเอเจนต์ทั่วไปที่อยู่นอกบอร์ด
         mapping = {
             "answergenerationagent": "report",
             "metadataagent": "knowledge",
@@ -71,134 +82,113 @@ class AIGateway:
             "knowledgeingestionagent": "knowledge",
             "retrievalagent": "knowledge",
             "rerankingagent": "analyst",
-            "feedbacklearningagent": "datagov"
+            "feedbacklearningagent": "datagov",
         }
         return mapping.get(agent_id_lower)
 
     @classmethod
-    def _check_budget(cls, db: Session, agent_id: str) -> Tuple[bool, Optional[str], Optional[Agent]]:
-        """ตรวจสอบสถานะของเอเจนต์และตรวจสอบยอดคงเหลือของโทเค็นก่อนรัน API"""
+    def _check_budget(
+        cls,
+        db: Session,
+        agent_id: str,
+    ) -> Tuple[bool, Optional[str], Optional[Agent]]:
         role_key = cls._map_agent_role(agent_id)
         if not role_key:
-            # หากไม่มีการแมป ถือเป็นคำขอของระบบส่วนกลาง ไม่บล็อกและไม่มีขีดจำกัดงบ
             return True, None, None
 
         try:
             agent = db.query(Agent).filter(Agent.role == role_key).first()
             if not agent:
-                # ลองค้นหาด้วยชื่อเต็มเผื่อ
-                agent = db.query(Agent).filter(Agent.name.like(f"%{role_key}%")).first()
-                
-            if not agent:
-                logger.warning(f"Agent with role '{role_key}' not found in database. Proceeding without budget limitation.")
+                reason = f"Governed agent role '{role_key}' is not registered."
+                if settings.is_production:
+                    return False, reason, None
+                logger.warning("%s Development request allowed without budget.", reason)
                 return True, None, None
-
             if not agent.is_active:
-                return False, f"Agent '{agent.name}' is inactive (disabled by administrator).", agent
-
+                return False, f"Agent '{agent.name}' is inactive.", agent
             if agent.token_balance <= 0:
-                return False, f"Agent '{agent.name}' has exceeded its daily token budget limit (Balance: {agent.token_balance}).", agent
-
+                return False, f"Agent '{agent.name}' has no token balance.", agent
             return True, None, agent
-        except Exception as e:
-            logger.error(f"Error checking budget for agent {agent_id}: {e}")
-            return True, None, None # ในกรณี DB ขัดข้องชั่วคราว ให้ปล่อยผ่านเพื่อไม่ขัดขวางการทำงานหลัก
+        except Exception as exc:
+            logger.error("Agent budget check failed for %s: %s", agent_id, exc)
+            if settings.is_production:
+                return False, "Agent budget control is unavailable.", None
+            return True, None, None
 
     @classmethod
-    def _deduct_budget(cls, db: Session, agent: Optional[Agent], tokens_used: int):
-        """หักลบจำนวนโทเค็นที่ใช้งานจริงออกจากกระเป๋าของเอเจนต์"""
+    def _deduct_budget(
+        cls,
+        db: Session,
+        agent: Optional[Agent],
+        tokens_used: int,
+    ) -> None:
         if not agent or tokens_used <= 0:
             return
         try:
-            # อัปเดตและหัก Token
             agent.token_used += tokens_used
-            agent.token_balance -= tokens_used
+            agent.token_balance = max(0, agent.token_balance - tokens_used)
             db.commit()
-            logger.info(f"Deducted {tokens_used} tokens from Agent '{agent.name}'. Remaining balance: {agent.token_balance}")
-        except Exception as e:
-            logger.error(f"Failed to deduct budget for agent {agent.name}: {e}")
+        except Exception as exc:
             db.rollback()
+            logger.error("Failed to deduct agent budget: %s", exc)
+            if settings.is_production:
+                raise
 
     @classmethod
     def generate_response(
-        cls, 
-        db: Session, 
-        prompt: str, 
-        system_instruction: Optional[str] = None, 
-        model_name: str = "gemini-1.5-flash",
+        cls,
+        db: Session,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        model_name: str = "gemini-2.5-flash",
         temperature: float = 0.3,
-        agent_id: str = "system"
+        agent_id: str = "system",
     ) -> str:
-        """
-        AI Gateway ทำหน้าที่ส่งคำขอไปยังโมเดลที่เหมาะสม 
-        มีระบบควบคุมงบโทเค็น (Budget Check) และ Circuit Breaker
-        """
-        # 1. ตรวจสอบ Budget ของเอเจนต์ก่อน
         allowed, reason, agent = cls._check_budget(db, agent_id)
         if not allowed:
-            logger.warning(f"Request blocked: {reason}")
-            return f"[ระบบควบคุมเอเจนต์] ปฏิเสธการทำงานเนื่องจาก: {reason}"
+            raise PermissionError(reason)
 
         provider = cls._detect_provider(model_name)
+        if provider != "gemini":
+            raise AIProviderUnavailable(
+                f"Provider '{provider}' is not implemented. Requested model: {model_name}."
+            )
+
         breaker = cls._get_breaker(provider)
-
-        # 2. เช็ค Circuit Breaker
         if not breaker.allow_request():
-            logger.warning(f"Provider {provider} is currently blocked by Circuit Breaker. Routing to fallback provider.")
-            if provider != "gemini":
-                # Fallback ไปยัง Gemini
-                return cls.generate_response(db, prompt, system_instruction, "gemini-1.5-flash", temperature, agent_id)
-            else:
-                return "[คำตอบจำลองเนื่องจากระบบ AI Gateway เกิดความขัดข้องชั่วคราว] ขออภัยในความไม่สะดวก"
+            raise AIProviderUnavailable("Gemini circuit breaker is open.")
 
-        # 3. ส่งคำขอไปยังผู้ให้บริการที่เลือก
         try:
-            response_text = ""
-            if provider == "gemini":
-                response_text = GeminiService.generate_response(
-                    prompt, 
-                    system_instruction=system_instruction, 
-                    temperature=temperature
-                )
-            elif provider in ["openai", "anthropic", "deepseek"]:
-                logger.info(f"Simulating API request for provider {provider} using model {model_name}")
-                adjusted_system = f"{system_instruction or ''}\n[ระบบจำลองสมอง {model_name} ของฝั่ง {provider.upper()}]"
-                response_text = GeminiService.generate_response(
-                    prompt,
-                    system_instruction=adjusted_system,
-                    temperature=temperature
-                )
-            else:
-                response_text = GeminiService.generate_response(
-                    prompt,
-                    system_instruction=system_instruction,
-                    temperature=temperature
-                )
-
-            # บันทึกความสำเร็จใน Circuit Breaker
+            response_text = GeminiService.generate_response(
+                prompt,
+                system_instruction=system_instruction,
+                temperature=temperature,
+                model_name=model_name,
+            )
             breaker.record_success()
 
-            # 4. คิดจำนวนโทเค็นและคำนวณราคา
-            input_tokens = len(prompt) // 4 + (len(system_instruction or "") // 4)
-            output_tokens = len(response_text) // 4
+            input_tokens = max(1, len(prompt) // 4) + max(
+                0, len(system_instruction or "") // 4
+            )
+            output_tokens = max(1, len(response_text) // 4)
             total_tokens = input_tokens + output_tokens
-            cost = cls._calculate_cost(provider, model_name, input_tokens, output_tokens)
-            
-            # บันทึกประวัติการใช้จ่ายของเอเจนต์
+            estimated_cost = cls._calculate_estimated_cost(
+                provider, input_tokens, output_tokens
+            )
             cls._deduct_budget(db, agent, total_tokens)
-            cls._log_cost(db, agent_id, provider, model_name, input_tokens, output_tokens, cost)
-
+            cls._log_cost(
+                db,
+                agent_id,
+                provider,
+                model_name,
+                input_tokens,
+                output_tokens,
+                estimated_cost,
+            )
             return response_text
-
-        except Exception as e:
-            logger.error(f"Error in AIGateway calling {provider} / {model_name}: {e}")
+        except Exception:
             breaker.record_failure()
-            
-            if provider != "gemini":
-                logger.info("Attempting recovery fallback to Gemini...")
-                return cls.generate_response(db, prompt, system_instruction, "gemini-1.5-flash", temperature, agent_id)
-            
-            raise e
+            raise
 
     @classmethod
     def generate_json_response(
@@ -206,127 +196,103 @@ class AIGateway:
         db: Session,
         prompt: str,
         system_instruction: Optional[str] = None,
-        model_name: str = "gemini-1.5-flash",
-        agent_id: str = "system"
+        model_name: str = "gemini-2.5-flash",
+        agent_id: str = "system",
     ) -> Dict[str, Any]:
-        """
-        AI Gateway สำหรับส่งคำขอที่ต้องการโครงสร้างข้อมูลแบบ JSON
-        """
-        # 1. ตรวจสอบ Budget ของเอเจนต์ก่อน
         allowed, reason, agent = cls._check_budget(db, agent_id)
         if not allowed:
-            logger.warning(f"Request blocked: {reason}")
-            return {"error": "budget_exceeded", "reason": reason}
+            raise PermissionError(reason)
 
         provider = cls._detect_provider(model_name)
+        if provider != "gemini":
+            raise AIProviderUnavailable(
+                f"Provider '{provider}' is not implemented. Requested model: {model_name}."
+            )
+
         breaker = cls._get_breaker(provider)
-
-        # 2. เช็ค Circuit Breaker
         if not breaker.allow_request():
-            logger.warning(f"Provider {provider} is currently blocked by Circuit Breaker. Routing to fallback.")
-            if provider != "gemini":
-                return cls.generate_json_response(db, prompt, system_instruction, "gemini-1.5-flash", agent_id)
-            else:
-                return {"error": "service_unavailable", "reason": "Circuit breaker is open"}
+            raise AIProviderUnavailable("Gemini circuit breaker is open.")
 
-        # 3. ส่งคำขอ JSON
         try:
-            result = {}
-            if provider == "gemini":
-                result = GeminiService.generate_json_response(
-                    prompt, 
-                    system_instruction=system_instruction
-                )
-            elif provider in ["openai", "anthropic", "deepseek"]:
-                logger.info(f"Simulating JSON request for provider {provider} using model {model_name}")
-                adjusted_system = f"{system_instruction or ''}\n[จำลองสมอง {model_name} ของฝั่ง {provider.upper()} - ต้องตอบกลับเป็น JSON ที่ถูกต้อง]"
-                result = GeminiService.generate_json_response(
-                    prompt,
-                    system_instruction=adjusted_system
-                )
-            else:
-                result = GeminiService.generate_json_response(
-                    prompt,
-                    system_instruction=system_instruction
-                )
-
-            # บันทึกความสำเร็จใน Circuit Breaker
+            result = GeminiService.generate_json_response(
+                prompt,
+                system_instruction=system_instruction,
+                model_name=model_name,
+            )
             breaker.record_success()
 
-            # 4. คิดปริมาณโทเค็นและคำนวณราคา
-            output_str = json.dumps(result, ensure_ascii=False)
-            input_tokens = len(prompt) // 4 + (len(system_instruction or "") // 4)
-            output_tokens = len(output_str) // 4
+            output_text = json.dumps(result, ensure_ascii=False)
+            input_tokens = max(1, len(prompt) // 4) + max(
+                0, len(system_instruction or "") // 4
+            )
+            output_tokens = max(1, len(output_text) // 4)
             total_tokens = input_tokens + output_tokens
-            cost = cls._calculate_cost(provider, model_name, input_tokens, output_tokens)
-            
-            # ตัดยอดเงินโทเค็นของเอเจนต์
+            estimated_cost = cls._calculate_estimated_cost(
+                provider, input_tokens, output_tokens
+            )
             cls._deduct_budget(db, agent, total_tokens)
-            cls._log_cost(db, agent_id, provider, model_name, input_tokens, output_tokens, cost)
-
+            cls._log_cost(
+                db,
+                agent_id,
+                provider,
+                model_name,
+                input_tokens,
+                output_tokens,
+                estimated_cost,
+            )
             return result
-
-        except Exception as e:
-            logger.error(f"Error in AIGateway generate_json_response for {provider} / {model_name}: {e}")
+        except Exception:
             breaker.record_failure()
-            
-            if provider != "gemini":
-                logger.info("Attempting recovery fallback to Gemini...")
-                return cls.generate_json_response(db, prompt, system_instruction, "gemini-1.5-flash", agent_id)
-            
-            raise e
+            raise
 
-    @classmethod
-    def _detect_provider(cls, model_name: str) -> str:
-        if not model_name:
+    @staticmethod
+    def _detect_provider(model_name: str) -> str:
+        value = (model_name or "").lower()
+        if "gemini" in value:
             return "gemini"
-        model_name_lower = model_name.lower()
-        if "gemini" in model_name_lower:
-            return "gemini"
-        elif "gpt" in model_name_lower:
+        if "gpt" in value:
             return "openai"
-        elif "claude" in model_name_lower:
+        if "claude" in value:
             return "anthropic"
-        elif "deepseek" in model_name_lower:
+        if "deepseek" in value:
             return "deepseek"
         return "local"
 
-    @classmethod
-    def _calculate_cost(cls, provider: str, model_name: str, input_tokens: int, output_tokens: int) -> float:
-        rates = {
-            "gemini": {"input": 0.075, "output": 0.30},
-            "openai": {"input": 2.50, "output": 10.00},
-            "anthropic": {"input": 3.00, "output": 15.00},
-            "deepseek": {"input": 0.14, "output": 0.28},
-            "local": {"input": 0.00, "output": 0.00}
-        }
-        prov_rates = rates.get(provider, {"input": 0.1, "output": 0.2})
-        input_cost = (input_tokens / 1_000_000) * prov_rates["input"]
-        output_cost = (output_tokens / 1_000_000) * prov_rates["output"]
+    @staticmethod
+    def _calculate_estimated_cost(
+        provider: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> float:
+        """Development estimate only; billing reconciliation is external."""
+        if provider != "gemini":
+            return 0.0
+        input_cost = (input_tokens / 1_000_000) * 0.075
+        output_cost = (output_tokens / 1_000_000) * 0.30
         return float(input_cost + output_cost)
 
-    @classmethod
+    @staticmethod
     def _log_cost(
-        cls, 
-        db: Session, 
-        agent_id: str, 
-        provider: str, 
-        model: str, 
-        input_tokens: int, 
-        output_tokens: int, 
-        cost_usd: float
-    ):
+        db: Session,
+        agent_id: str,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+    ) -> None:
         try:
-            cost_log = CostLog(
-                agent_id=agent_id,
-                provider=provider,
-                model=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost_usd=cost_usd
+            db.add(
+                CostLog(
+                    agent_id=agent_id,
+                    provider=provider,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=cost_usd,
+                )
             )
-            db.add(cost_log)
             db.commit()
-        except Exception as e:
-            logger.error(f"Failed to write cost log: {e}")
+        except Exception as exc:
             db.rollback()
+            logger.error("Failed to write cost log: %s", exc)

@@ -1,45 +1,58 @@
-import os
 import logging
-import whisper
+import os
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+
+class SpeechToTextUnavailable(RuntimeError):
+    """Raised when an approved speech-to-text engine is unavailable."""
+
+
 class SpeechToTextService:
-    _model = None
+    _model: Optional[Any] = None
 
     @classmethod
     def _get_model(cls):
-        """โหลดโมเดล Whisper แบบ Lazy-loading และ Cache ไว้ในหน่วยความจำ"""
-        if cls._model is None:
-            logger.info("Loading Whisper 'tiny' model...")
-            # ใช้ tiny model เพื่อให้ทำงานได้รวดเร็วและใช้หน่วยความจำน้อยที่สุดในระดับ Local Intranet
+        """Lazy-load Whisper so unrelated API modules can start without it."""
+        if cls._model is not None:
+            return cls._model
+
+        try:
+            import whisper
+        except ImportError as exc:
+            raise SpeechToTextUnavailable(
+                "Whisper is not installed. Configure an approved transcription provider."
+            ) from exc
+
+        logger.info("Loading Whisper 'tiny' model for controlled transcription.")
+        try:
             cls._model = whisper.load_model("tiny")
-            logger.info("Whisper model loaded successfully.")
-        return cls._model
+            return cls._model
+        except Exception as exc:
+            raise SpeechToTextUnavailable(
+                "Whisper model could not be loaded."
+            ) from exc
 
     @classmethod
     def transcribe(cls, audio_file_path: str) -> str:
-        """[Milestone 2] สกัดเสียงการประชุมออกมาเป็นข้อความบทสนทนาจริงโดยใช้ Whisper"""
-        if not audio_file_path or not os.path.exists(audio_file_path):
-            logger.warning(f"Audio file not found: {audio_file_path}")
-            return "ไม่พบไฟล์เสียงในการประชุม"
+        """Transcribe an existing audio file or fail without inventing content."""
+        if not audio_file_path or not os.path.isfile(audio_file_path):
+            raise FileNotFoundError("Meeting audio file was not found.")
 
         try:
-            logger.info(f"Transcribing audio file: {audio_file_path}")
             model = cls._get_model()
-            
-            # ถอดความเสียง (transcribe) โดยระบุภาษาไทย ("th")
-            # ในที่นี้บังคับเป็นภาษาไทยเพื่อความแม่นยำและรวดเร็ว
             result = model.transcribe(audio_file_path, language="th")
-            text = result.get("text", "").strip()
-            
-            logger.info("Transcription completed successfully.")
+            text = str(result.get("text", "")).strip()
+            if not text:
+                raise SpeechToTextUnavailable(
+                    "The transcription provider returned no usable text."
+                )
             return text
-        except Exception as e:
-            logger.error(f"Failed to transcribe audio using Whisper: {e}. Falling back to simulated transcript.")
-            # Fallback ข้อความตัวอย่างในกรณีระบบขัดข้อง
-            return (
-                "นพ.สสจ.: การแพร่ระบาดของวัณโรคและฝุ่นละออง PM2.5 ในพื้นที่ชายแดนยังเป็นปัญหาสำคัญ "
-                "เราจำเป็นต้องจัดสรรงบประมาณภัยพิบัติในการแจกหน้ากาก N95 ด่วนที่สุด และนำระบบตรวจคัดกรองเชิงรุกด้วย "
-                "GeneXpert และรถเอกซเรย์พระราชทานเข้าไปตรวจประชากรในเรือนจำเป้าหมายให้เสร็จสิ้นภายในไตรมาสนี้"
-            )
+        except (FileNotFoundError, SpeechToTextUnavailable):
+            raise
+        except Exception as exc:
+            logger.error("Speech-to-text processing failed: %s", exc)
+            raise SpeechToTextUnavailable(
+                "Speech-to-text processing failed. No transcript was generated."
+            ) from exc

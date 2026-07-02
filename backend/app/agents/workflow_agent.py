@@ -1,92 +1,135 @@
 import json
 import logging
+from typing import Any
+
 from sqlalchemy.orm import Session
-from backend.app.db.models import WorkflowRun
-from backend.app.services.workflow_service import WorkflowService
-from backend.app.services.gemini_service import GeminiService
+
 from backend.app.agents.agents import log_agent_activity
+from backend.app.db.models import HITLQueue, WorkflowRun
+from backend.app.services.ai_gateway import AIGateway
+from backend.app.services.workflow_service import WorkflowService
 
 logger = logging.getLogger(__name__)
 
+
 class WorkflowAgent:
     @staticmethod
-    def execute_backoffice_action(db: Session, workflow_name: str, parameters: dict) -> dict:
-        """[Milestone 5] ควบคุมการเปิดทำงานและการอนุมัติขั้นตอนการทำงานผ่านปัญญาประดิษฐ์สนับสนุน Backoffice"""
-        logger.info(f"WorkflowAgent executing workflow: {workflow_name} with params: {parameters}")
-        
-        # 1. เรียกใช้ Gemini เพื่อวิเคราะห์และสร้างขั้นตอนการรันงานอย่างเป็นโครงสร้าง
-        system_instruction = (
-            "You are the Health Organization OS Workflow Agent. "
-            "Analyze the requested backoffice workflow and parameters. "
-            "Generate 3 to 5 realistic sequential steps for this workflow. "
-            "Return ONLY a JSON object with a single key 'steps' which contains a list of objects. "
-            "Each object must have 'step' (a detailed Thai string explaining the step) and 'status' "
-            "(either 'completed' or 'pending_human_approval' or 'pending'). "
-            "Ensure that at least one step is 'pending_human_approval' if human verification is required (e.g., final approval)."
-        )
-        
-        prompt = (
-            f"Workflow Name: {workflow_name}\n"
-            f"Parameters: {json.dumps(parameters, ensure_ascii=False)}\n\n"
-            f"Please generate the execution steps."
-        )
-        
-        extracted_steps = GeminiService.generate_json_response(prompt, system_instruction)
-        
-        # Fallback หากเรียก Gemini ไม่ได้หรือวิเคราะห์ขัดข้อง
-        if not extracted_steps or "steps" not in extracted_steps:
-            if workflow_name == "DisasterAlert":
-                extracted_steps = {
-                    "steps": [
-                        {"step": f"ตรวจวัดค่าฝุ่นละออง PM2.5 ในพื้นที่ {parameters.get('location', 'เชียงราย')} เกินค่ามาตรฐาน (วิกฤต)", "status": "completed"},
-                        {"step": "AI คาดการณ์ยอดผู้ป่วยทางเดินหายใจล่วงหน้า 3 วันและแจ้งเตือนหน่วยงานที่เกี่ยวข้อง", "status": "completed"},
-                        {"step": f"ร่างหนังสือราชการประกาศภัยพิบัติและขออนุมัติจัดส่งหน้ากาก N95 จำนวน {parameters.get('mask_qty', '50,000')} ชิ้น", "status": "completed"},
-                        {"step": "เสนออนุมัติให้นายแพทย์สาธารณสุขจังหวัด (PHO) ลงนามยืนยันคำสั่งเพื่อประสาน อบจ. ท้องถิ่น", "status": "pending_human_approval"}
-                    ]
-                }
-            else:
-                extracted_steps = {
-                    "steps": [
-                        {"step": f"เริ่มต้นระบบประมวลผลสำหรับเวิร์กโฟลว์ {workflow_name}", "status": "completed"},
-                        {"step": "ตรวจสอบทรัพยากรและความพร้อมของระบบย่อย", "status": "completed"},
-                        {"step": "เสนอผู้บริหารพิจารณาอนุมัติสั่งการดำเนินการ", "status": "pending_human_approval"}
-                    ]
-                }
-        
-        # 2. เริ่มรัน Temporal workflow จำลอง
-        temporal_wf_id = WorkflowService.start_temporal_workflow(workflow_name, parameters)
-        
-        # ค้นหา step ที่กำลังรอการตัดสินใจ
-        current_step = "Human Approval Pending"
-        for st in extracted_steps.get("steps", []):
-            if st.get("status") == "pending_human_approval":
-                current_step = st.get("step")
-                break
-                
-        # 3. บันทึกลงตาราง WorkflowRun ใน SQLite
-        wf_run = WorkflowRun(
-            workflow_name=workflow_name,
-            status="RUNNING" if any(s.get("status") != "completed" for s in extracted_steps.get("steps", [])) else "COMPLETED",
-            current_step=current_step,
-            payload_data=json.dumps({
-                "parameters": parameters,
-                "steps": extracted_steps.get("steps", []),
-                "temporal_id": temporal_wf_id
-            }, ensure_ascii=False)
-        )
-        db.add(wf_run)
-        db.commit()
-        db.refresh(wf_run)
-        
-        result = {
-            "id": wf_run.id,
-            "workflow_name": wf_run.workflow_name,
-            "status": wf_run.status,
-            "current_step": wf_run.current_step,
-            "temporal_id": temporal_wf_id,
-            "steps": extracted_steps.get("steps", [])
-        }
-        
-        log_agent_activity(db, "WorkflowAgent", "execute_workflow", {"workflow_name": workflow_name}, result)
-        return result
+    def _validate_plan(raw: dict[str, Any]) -> list[dict[str, str]]:
+        steps = raw.get("steps") if isinstance(raw, dict) else None
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 10:
+            raise ValueError("Workflow plan must contain 1 to 10 steps.")
 
+        validated: list[dict[str, str]] = []
+        for index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict):
+                raise ValueError(f"Workflow step {index} must be an object.")
+            description = str(step.get("step", "")).strip()
+            if not description:
+                raise ValueError(f"Workflow step {index} has no description.")
+            # An LLM can propose work but cannot mark real-world work completed.
+            validated.append(
+                {
+                    "step": description[:1000],
+                    "status": "planned",
+                }
+            )
+        return validated
+
+    @staticmethod
+    def execute_backoffice_action(
+        db: Session,
+        workflow_name: str,
+        parameters: dict,
+    ) -> dict:
+        """Create a governed workflow plan; do not execute external actions."""
+        normalized_name = workflow_name.strip()[:255]
+        if not normalized_name:
+            raise ValueError("workflow_name is required")
+        if not isinstance(parameters, dict):
+            raise ValueError("parameters must be an object")
+
+        system_instruction = (
+            "You are the HosPrime Workflow Planning Agent. "
+            "Create a plan only. You have not executed any step. "
+            "Return JSON with key 'steps', containing 3 to 7 objects. "
+            "Each object contains only 'step', written in Thai. "
+            "Include verification, evidence review, risk control, human approval, "
+            "and outcome measurement where relevant. Never use the word completed."
+        )
+        prompt = (
+            f"Workflow name: {normalized_name}\n"
+            f"Parameters: {json.dumps(parameters, ensure_ascii=False)}\n"
+            "Create an auditable execution plan."
+        )
+
+        raw_plan = AIGateway.generate_json_response(
+            db=db,
+            prompt=prompt,
+            system_instruction=system_instruction,
+            model_name="gemini-2.5-flash",
+            agent_id="WorkflowPlanningAgent",
+        )
+        steps = WorkflowAgent._validate_plan(raw_plan)
+        plan_reference = WorkflowService.create_plan_reference(normalized_name)
+
+        workflow_run = WorkflowRun(
+            workflow_name=normalized_name,
+            status="PENDING_APPROVAL",
+            current_step="Human review of proposed plan",
+            payload_data=json.dumps(
+                {
+                    "parameters": parameters,
+                    "steps": steps,
+                    "plan_reference": plan_reference,
+                    "execution_mode": "plan_only",
+                    "external_actions_executed": False,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.add(workflow_run)
+        db.commit()
+        db.refresh(workflow_run)
+
+        queue_item = HITLQueue(
+            workflow_id=str(workflow_run.id),
+            task_id=f"review_plan_{workflow_run.id}",
+            agent_id="WorkflowPlanningAgent",
+            status="pending",
+            payload=json.dumps(
+                {
+                    "workflow_name": normalized_name,
+                    "steps": steps,
+                },
+                ensure_ascii=False,
+            ),
+            context=json.dumps(
+                {
+                    "parameters": parameters,
+                    "external_actions_executed": False,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.add(queue_item)
+        db.commit()
+        db.refresh(queue_item)
+
+        result = {
+            "id": workflow_run.id,
+            "workflow_name": workflow_run.workflow_name,
+            "status": workflow_run.status,
+            "current_step": workflow_run.current_step,
+            "plan_reference": plan_reference,
+            "hitl_queue_id": queue_item.id,
+            "steps": steps,
+            "external_actions_executed": False,
+        }
+        log_agent_activity(
+            db,
+            "WorkflowPlanningAgent",
+            "create_workflow_plan",
+            {"workflow_name": normalized_name},
+            result,
+        )
+        return result

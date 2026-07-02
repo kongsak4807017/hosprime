@@ -31,5 +31,8 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
       - name: Run source register tests
         run: python -m pytest -q tests/test_m1_source_register.py

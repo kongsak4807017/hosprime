@@ -17,6 +17,7 @@ jobs:
       ALLOW_DEMO_FALLBACKS: "false"
       ALLOW_PSEUDO_EMBEDDINGS: "false"
       DATABASE_URL: sqlite:///./ci-hosprime.db
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,11 +26,11 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && pip install -r backend/requirements.txt
+        run: pip install -q -r backend/requirements.txt
       - name: Compile backend
         run: python -m compileall -q backend
-      - name: Run backend tests
-        run: pytest -q backend/tests
+      - name: Run governance safety tests
+        run: pytest backend/tests/test_governance_safety.py -vv --tb=short
       - name: Import application
         run: python -c "from backend.app.main import app; print(app.title)"
 

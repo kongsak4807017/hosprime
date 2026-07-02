@@ -3,6 +3,12 @@
 ## Architecture
 
 - [`architecture/CURRENT_STATE_REASSESSMENT.md`](architecture/CURRENT_STATE_REASSESSMENT.md) — latest technical and product maturity assessment
+- [`architecture/LOOP_ENGINEERING_ARCHITECTURE.md`](architecture/LOOP_ENGINEERING_ARCHITECTURE.md) — evidence-driven daily, sprint, milestone and strategic learning loops
+- [`architecture/TWO_LAYER_MEMORY_ARCHITECTURE.md`](architecture/TWO_LAYER_MEMORY_ARCHITECTURE.md) — Personal/Twin Obsidian graph memory, Role Memory, Organizational RAG and promotion boundaries
+
+## Operations
+
+- [`operations/CONTINUOUS_RESEARCH_AND_LEARNING_LOOP.md`](operations/CONTINUOUS_RESEARCH_AND_LEARNING_LOOP.md) — continuous external research, source governance, synthesis and research-to-code traceability
 
 ## Project governance
 
@@ -20,6 +26,13 @@
 
 - [`roadmap/MASTER_IMPLEMENTATION_PLAN.md`](roadmap/MASTER_IMPLEMENTATION_PLAN.md) — controlled 90-day Milestone 1 plan and later milestone sequence
 
+## Implemented foundations
+
+- `backend/app/memory/` — governed memory contracts and Obsidian-compatible Personal Graph Store
+- `backend/app/engineering_loop/` — loop run manifest, evidence package and ordered state transitions
+- `backend/tests/test_personal_graph_memory.py` — Personal Graph behavior and boundary tests
+- `backend/tests/test_engineering_loop.py` — engineering-loop contract tests
+
 ## Operating rule
 
-A document, screen, API or class name does not prove maturity. Capability status is determined by the evidence and gate decision recorded under this documentation system.
+A document, screen, API or class name does not prove maturity. Capability status is determined by evidence, tests and a recorded gate decision.

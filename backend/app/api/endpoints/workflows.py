@@ -1,133 +1,171 @@
+import json
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.app.db.session import get_db
-from backend.app.db.models import WorkflowRun
+
 from backend.app.agents.workflow_agent import WorkflowAgent
-import json
+from backend.app.auth import get_current_user
+from backend.app.db.models import AuditLog, HITLQueue, User, WorkflowRun
+from backend.app.db.session import get_db
 
 router = APIRouter()
 
+
 @router.post("/trigger")
-def trigger_backoffice_workflow(workflow_name: str, payload: dict, db: Session = Depends(get_db)):
-    """[Milestone 5] สั่งกระตุ้นการทำงาน Backoffice AI Workflow จริงและบันทึกประวัติขั้นตอนลงฐานข้อมูล SQLite"""
+def trigger_backoffice_workflow(
+    workflow_name: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create an AI-assisted plan and place it in the HITL approval queue."""
     try:
-        # สกัด parameters ที่เหมาะสมจาก payload
         parameters = payload.get("payload", payload)
-        result = WorkflowAgent.execute_backoffice_action(db, workflow_name, parameters)
-        return {
-            "status": "triggered",
-            "workflow_id": str(result.get("id")),
-            "message": f"Temporal workflow '{workflow_name}' has been initiated and logged in SQLite.",
-            "data": result
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"เกิดข้อผิดพลาดในการรัน Workflow: {str(e)}"
+        result = WorkflowAgent.execute_backoffice_action(
+            db,
+            workflow_name,
+            parameters,
         )
-
-@router.get("/status/{workflow_id}")
-def get_workflow_status(workflow_id: str, db: Session = Depends(get_db)):
-    """[Milestone 5] ตรวจสอบสถานะการประมวลผลและการอนุมัติของ Workflow จากฐานข้อมูล SQLite"""
-    try:
-        wf_run = None
-        try:
-            wf_id_int = int(workflow_id)
-            wf_run = db.query(WorkflowRun).filter(WorkflowRun.id == wf_id_int).first()
-        except ValueError:
-            # หากส่ง ID เป็นข้อความอื่น (เช่นเดโม) ให้ดึงตัวล่าสุดในระบบ
-            wf_run = db.query(WorkflowRun).order_by(WorkflowRun.id.desc()).first()
-            
-        if not wf_run:
-            # Fallback หากไม่มีข้อมูลเวิร์กโฟลว์รันในระบบเลย
-            return {
-                "workflow_id": workflow_id,
-                "status": "RUNNING",
-                "steps": [
-                    {"step": "ตรวจวัดค่าฝุ่นละออง PM2.5 > 150 ไมโครกรัม ณ เชียงราย", "status": "completed"},
-                    {"step": "AI วิเคราะห์แนวโน้มยอดผู้ป่วยทางเดินหายใจล่วงหน้า 3 วัน", "status": "completed"},
-                    {"step": "ร่างหนังสือราชการประกาศภัยพิบัติและขออนุมัติจัดส่งหน้ากาก N95", "status": "completed"},
-                    {"step": "เสนออนุมัติให้นายแพทย์สาธารณสุขจังหวัด (PHO) ยืนยันคำสั่งประสานงาน", "status": "pending_human_approval"}
-                ]
-            }
-            
-        # แกะข้อมูลขั้นตอนจาก payload_data
-        try:
-            data = json.loads(wf_run.payload_data)
-            steps = data.get("steps", [])
-            parameters = data.get("parameters", {})
-        except Exception:
-            steps = []
-            parameters = {}
-            
-        return {
-            "workflow_id": str(wf_run.id),
-            "workflow_name": wf_run.workflow_name,
-            "status": wf_run.status,
-            "current_step": wf_run.current_step,
-            "parameters": parameters,
-            "steps": steps,
-            "created_at": wf_run.created_at
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"เกิดข้อผิดพลาดในการตรวจสอบสถานะ Workflow: {str(e)}"
+        db.add(
+            AuditLog(
+                workflow_id=str(result["id"]),
+                user_id=current_user.username,
+                agent_id="WorkflowPlanningAgent",
+                action_type="workflow_plan_created",
+                input_data=json.dumps(parameters, ensure_ascii=False),
+                output_data=json.dumps(result, ensure_ascii=False),
+                tools_used=json.dumps(["ai_planning", "hitl_queue"]),
+                decisions=json.dumps(
+                    {
+                        "execution_authorized": False,
+                        "external_actions_executed": False,
+                    }
+                ),
+            )
         )
-
-
-@router.post("/approve/{workflow_id}")
-def approve_workflow_step(workflow_id: int, db: Session = Depends(get_db)):
-    """[Milestone 5] อนุมัติขั้นตอนการทำงาน (Human-in-the-loop) และปรับสถานะของ Workflow เป็นสำเร็จ"""
-    wf_run = db.query(WorkflowRun).filter(WorkflowRun.id == workflow_id).first()
-    if not wf_run:
-        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลเวิร์กโฟลว์นี้")
-        
-    if wf_run.status != "RUNNING":
+        db.commit()
         return {
-            "status": "warning",
-            "message": f"Workflow นี้ไม่ได้อยู่ในสถานะที่รออนุมัติ (สถานะปัจจุบัน: {wf_run.status})",
-            "data": {
-                "id": wf_run.id,
-                "status": wf_run.status
-            }
+            "status": "pending_approval",
+            "workflow_id": str(result["id"]),
+            "message": "Workflow plan created. No external action was executed.",
+            "data": result,
         }
-        
-    try:
-        data = json.loads(wf_run.payload_data)
-        steps = data.get("steps", [])
-        
-        # ค้นหาและอัปเดต step ที่เป็น pending_human_approval
-        updated = False
-        for step in steps:
-            if step.get("status") == "pending_human_approval":
-                step["status"] = "completed"
-                updated = True
-            elif step.get("status") == "pending":
-                step["status"] = "completed"
-                
-        if updated:
-            wf_run.status = "COMPLETED"
-            wf_run.current_step = "Workflow Completed Successfully"
-            data["steps"] = steps
-            wf_run.payload_data = json.dumps(data, ensure_ascii=False)
-            db.commit()
-            db.refresh(wf_run)
-            
-        return {
-            "status": "success",
-            "message": "อนุมัติขั้นตอนเวิร์กโฟลว์และประมวลผลขั้นตอนสุดท้ายเสร็จสิ้นแล้ว",
-            "data": {
-                "id": wf_run.id,
-                "status": wf_run.status,
-                "current_step": wf_run.current_step,
-                "steps": steps
-            }
-        }
-    except Exception as e:
+    except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"เกิดข้อผิดพลาดในการอนุมัติเวิร์กโฟลว์: {str(e)}"
+            detail="Workflow plan creation failed. Review server logs.",
+        ) from exc
+
+
+@router.get("/status/{workflow_id}")
+def get_workflow_status(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workflow = db.query(WorkflowRun).filter(WorkflowRun.id == workflow_id).first()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    try:
+        data = json.loads(workflow.payload_data or "{}")
+    except json.JSONDecodeError:
+        data = {}
+
+    return {
+        "workflow_id": str(workflow.id),
+        "workflow_name": workflow.workflow_name,
+        "status": workflow.status,
+        "current_step": workflow.current_step,
+        "parameters": data.get("parameters", {}),
+        "steps": data.get("steps", []),
+        "execution_mode": data.get("execution_mode", "unknown"),
+        "external_actions_executed": data.get(
+            "external_actions_executed", False
+        ),
+        "created_at": workflow.created_at,
+    }
+
+
+@router.post("/approve/{workflow_id}")
+def approve_workflow_plan(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Approve the plan only. This endpoint does not execute tools or actions."""
+    workflow = db.query(WorkflowRun).filter(WorkflowRun.id == workflow_id).first()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if workflow.status != "PENDING_APPROVAL":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Workflow cannot be approved from status {workflow.status}",
         )
 
+    try:
+        approval_token = f"APR-{uuid4().hex}"
+        workflow.status = "APPROVED_NOT_EXECUTED"
+        workflow.current_step = "Awaiting configured and authorized executor"
+
+        queue_item = (
+            db.query(HITLQueue)
+            .filter(
+                HITLQueue.workflow_id == str(workflow_id),
+                HITLQueue.status == "pending",
+            )
+            .order_by(HITLQueue.id.desc())
+            .first()
+        )
+        if queue_item:
+            queue_item.status = "approved"
+            queue_item.approved_by = current_user.username
+            queue_item.approved_at = datetime.now(timezone.utc)
+            queue_item.approval_token = approval_token
+
+        db.add(
+            AuditLog(
+                workflow_id=str(workflow_id),
+                user_id=current_user.username,
+                action_type="workflow_plan_approved",
+                input_data=json.dumps({"workflow_id": workflow_id}),
+                output_data=json.dumps(
+                    {
+                        "status": workflow.status,
+                        "external_actions_executed": False,
+                    }
+                ),
+                tools_used=json.dumps(["hitl_gateway"]),
+                decisions=json.dumps(
+                    {
+                        "plan_approved": True,
+                        "execution_authorized": False,
+                    }
+                ),
+                approval_token=approval_token,
+            )
+        )
+        db.commit()
+        db.refresh(workflow)
+        return {
+            "status": "approved_not_executed",
+            "message": (
+                "The plan was approved. No external action was executed because "
+                "an authorized executor is not configured."
+            ),
+            "data": {
+                "id": workflow.id,
+                "status": workflow.status,
+                "current_step": workflow.current_step,
+                "external_actions_executed": False,
+            },
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Workflow approval failed. Review server logs.",
+        ) from exc

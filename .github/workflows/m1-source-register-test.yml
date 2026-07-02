@@ -1,0 +1,35 @@
+name: M1 Source Register Test
+
+on:
+  pull_request:
+    paths:
+      - data/source_register/m1_source_register.yml
+      - tests/test_m1_source_register.py
+      - .github/workflows/m1-source-register-test.yml
+  push:
+    branches:
+      - main
+    paths:
+      - data/source_register/m1_source_register.yml
+      - tests/test_m1_source_register.py
+      - .github/workflows/m1-source-register-test.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-register-gate:
+    name: Validate M1 source register gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run source register tests
+        run: python -m pytest -q tests/test_m1_source_register.py

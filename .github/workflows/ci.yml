@@ -18,6 +18,7 @@ jobs:
       ALLOW_PSEUDO_EMBEDDINGS: "false"
       DATABASE_URL: sqlite:///./ci-hosprime.db
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONPATH: "."
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

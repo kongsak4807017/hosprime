@@ -1,0 +1,175 @@
+# M1 Governed Knowledge Oracle — Source Readiness Register
+# Purpose: seed a measurable, auditable register before ingestion, embedding or indexing.
+# Boundary: placeholder records are DISCOVERED only and must not be treated as approved Organizational RAG evidence.
+
+schema_version: 1
+register_id: M1-A-SOURCE-REGISTER
+release_target: M1 Governed Knowledge Oracle MVP
+north_star_metric: Trusted Task Completion Rate
+baseline_metric: M1-A Source Readiness Baseline Coverage
+required_records_target: 100
+seed_records_count: 5
+allowed_lifecycle_states:
+  - DISCOVERED
+  - QUARANTINED
+  - PARSED
+  - CLASSIFIED
+  - QUALITY_CHECKED
+  - REVIEW_PENDING
+  - APPROVED
+  - INDEX_READY
+  - INDEXED
+  - REJECTED
+  - EXPIRED
+allowed_seed_lifecycle_states:
+  - DISCOVERED
+  - QUARANTINED
+active_rag_activation_allowed: false
+human_approval_required_for_approved_state: true
+
+records:
+  - source_id: M1A-PM25-001
+    knowledge_pack: PM2.5 and Environmental Health
+    source_title: PM2.5 public health operations evidence placeholder
+    source_type: operational_document_set
+    organization: pending_source_owner_confirmation
+    owner_role: Provincial public health environmental health lead
+    owner_person: pending_human_assignment
+    file_or_system_location: pending_inventory
+    version: pending_inventory
+    checksum: pending_checksum
+    checksum_pending_reason: Original controlled file not yet inventoried
+    classification: internal
+    access_policy: role_scoped_internal
+    allowed_roles:
+      - executive
+      - environmental_health_lead
+      - knowledge_reviewer
+    lifecycle_state: DISCOVERED
+    review_status: not_reviewed
+    reviewer: pending_human_reviewer
+    decision_date: null
+    review_date: null
+    next_review_date: null
+    parsing_status: not_started
+    quality_status: not_started
+    approval_status: not_approved
+    active_rag_index: false
+    limitation_note: Placeholder only; not approved evidence and not retrievable in active RAG.
+
+  - source_id: M1A-TB-001
+    knowledge_pack: Tuberculosis and Communicable Disease Control
+    source_title: TB control program evidence placeholder
+    source_type: program_document_set
+    organization: pending_source_owner_confirmation
+    owner_role: Provincial TB program lead
+    owner_person: pending_human_assignment
+    file_or_system_location: pending_inventory
+    version: pending_inventory
+    checksum: pending_checksum
+    checksum_pending_reason: Original controlled file not yet inventoried
+    classification: restricted_internal
+    access_policy: role_scoped_restricted
+    allowed_roles:
+      - executive
+      - communicable_disease_lead
+      - knowledge_reviewer
+    lifecycle_state: DISCOVERED
+    review_status: not_reviewed
+    reviewer: pending_human_reviewer
+    decision_date: null
+    review_date: null
+    next_review_date: null
+    parsing_status: not_started
+    quality_status: not_started
+    approval_status: not_approved
+    active_rag_index: false
+    limitation_note: Placeholder only; may include sensitive operational context after inventory, so access must remain restricted until reviewed.
+
+  - source_id: M1A-NCD-001
+    knowledge_pack: NCD and Chronic Care Service Model
+    source_title: NCD service model and workload evidence placeholder
+    source_type: program_document_set
+    organization: pending_source_owner_confirmation
+    owner_role: Provincial NCD program lead
+    owner_person: pending_human_assignment
+    file_or_system_location: pending_inventory
+    version: pending_inventory
+    checksum: pending_checksum
+    checksum_pending_reason: Original controlled file not yet inventoried
+    classification: internal
+    access_policy: role_scoped_internal
+    allowed_roles:
+      - executive
+      - ncd_program_lead
+      - knowledge_reviewer
+    lifecycle_state: DISCOVERED
+    review_status: not_reviewed
+    reviewer: pending_human_reviewer
+    decision_date: null
+    review_date: null
+    next_review_date: null
+    parsing_status: not_started
+    quality_status: not_started
+    approval_status: not_approved
+    active_rag_index: false
+    limitation_note: Placeholder only; not approved evidence and not retrievable in active RAG.
+
+  - source_id: M1A-EOC-001
+    knowledge_pack: Disaster, EOC and Public Health Emergency Operations
+    source_title: Disaster and EOC operational evidence placeholder
+    source_type: incident_command_document_set
+    organization: pending_source_owner_confirmation
+    owner_role: Provincial EOC or emergency response lead
+    owner_person: pending_human_assignment
+    file_or_system_location: pending_inventory
+    version: pending_inventory
+    checksum: pending_checksum
+    checksum_pending_reason: Original controlled file not yet inventoried
+    classification: restricted_internal
+    access_policy: role_scoped_restricted
+    allowed_roles:
+      - executive
+      - eoc_lead
+      - knowledge_reviewer
+    lifecycle_state: DISCOVERED
+    review_status: not_reviewed
+    reviewer: pending_human_reviewer
+    decision_date: null
+    review_date: null
+    next_review_date: null
+    parsing_status: not_started
+    quality_status: not_started
+    approval_status: not_approved
+    active_rag_index: false
+    limitation_note: Placeholder only; incident evidence may contain sensitive operational information and must not be activated without review.
+
+  - source_id: M1A-DIGITAL-001
+    knowledge_pack: Digital Health, Data Governance and AI Workflow
+    source_title: Digital health governance evidence placeholder
+    source_type: governance_document_set
+    organization: pending_source_owner_confirmation
+    owner_role: Digital health or data governance lead
+    owner_person: pending_human_assignment
+    file_or_system_location: pending_inventory
+    version: pending_inventory
+    checksum: pending_checksum
+    checksum_pending_reason: Original controlled file not yet inventoried
+    classification: internal
+    access_policy: role_scoped_internal
+    allowed_roles:
+      - executive
+      - digital_health_lead
+      - data_governance_lead
+      - knowledge_reviewer
+    lifecycle_state: DISCOVERED
+    review_status: not_reviewed
+    reviewer: pending_human_reviewer
+    decision_date: null
+    review_date: null
+    next_review_date: null
+    parsing_status: not_started
+    quality_status: not_started
+    approval_status: not_approved
+    active_rag_index: false
+    limitation_note: Placeholder only; not approved evidence and not retrievable in active RAG.

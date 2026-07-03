@@ -1,11 +1,39 @@
 # M1-B Controlled Source Confirmation Packet
 
-Status: build artifact / non-authoritative template  
+Status: controlled release artifact / inventory-confirmation only / non-authoritative for source approval  
 Release target: Milestone 1 — Governed Knowledge Oracle MVP  
 Parent issue: #10  
 Build control issue: #40  
-Previous stage: PLAN (#39)  
-Next stage: TEST
+Test control issue: #41  
+Evaluate control issue: #42  
+Review control issue: #43  
+Release control issue: #44  
+Previous stage: REVIEW (#43)  
+Current stage: RELEASE  
+Next stage: OBSERVE
+
+## Controlled release decision
+
+This packet is released only as a controlled source-inventory confirmation artifact.
+
+It may be used by a source owner, accountable office, source inventory operator, data governance lead or knowledge reviewer to collect inventory-readiness evidence for the five M1 seed source records.
+
+It must not be used as evidence that any source is approved, authoritative, ingested, parsed, embedded, indexed, retrievable, answerable or promoted into Organizational Memory / Governed RAG.
+
+```text
+M1_B_RELEASE_COMPLETED = true
+CONTROLLED_RELEASE_SCOPE = inventory_confirmation_only
+SOURCE_OWNER_EVIDENCE_COLLECTED = false
+SOURCE_REGISTER_MODIFIED = false
+SOURCE_APPROVAL_CLAIMED = false
+SOURCE_INGESTION_CLAIMED = false
+SOURCE_PARSING_CLAIMED = false
+SOURCE_EMBEDDING_CLAIMED = false
+SOURCE_INDEXING_CLAIMED = false
+RAG_ACTIVATION_CLAIMED = false
+FACTUAL_ANSWER_PERMISSION_CLAIMED = false
+ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
+```
 
 ## Purpose
 
@@ -57,7 +85,7 @@ SOURCE_INGESTION_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
 ```
 
-The BUILD stage creates this template only. It does not claim the target has been achieved.
+The RELEASE stage publishes this template only. It does not claim the target has been achieved.
 
 ## Confirmation cell statuses
 
@@ -226,17 +254,14 @@ FACTUAL_ANSWER_PERMISSION = true
 ORGANIZATIONAL_MEMORY_PROMOTION = true
 ```
 
-## Next stage acceptance tests
-
-The next TEST stage should validate:
+## Release acceptance checks
 
 ```text
-CONFIRMATION_PACKET_TEMPLATE_CREATED = true
-MINIMUM_CONFIRMATION_PACKET_FIELDS_PRESENT = true
-MEASUREMENT_METHOD_DEFINED = true
-NON_APPROVAL_BOUNDARY_DEFINED = true
-SOURCE_REGISTER_APPROVAL_STATUS_UNCHANGED = true
-SOURCE_REGISTER_ACTIVE_RAG_INDEX_UNCHANGED = true
+CONFIRMATION_PACKET_RELEASED = true
+RELEASE_SCOPE_LIMITED_TO_INVENTORY_CONFIRMATION = true
+SOURCE_REGISTER_APPROVAL_STATUS_UNCHANGED_REQUIRED = true
+SOURCE_REGISTER_ACTIVE_RAG_INDEX_UNCHANGED_REQUIRED = true
+OBSERVATION_STAGE_REQUIRED_BEFORE_LEARNING = true
 ```
 
 ## Memory layer affected

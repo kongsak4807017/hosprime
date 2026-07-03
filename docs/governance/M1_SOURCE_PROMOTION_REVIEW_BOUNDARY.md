@@ -41,6 +41,30 @@ ACTIVE_RAG_INDEXED_RECORDS = 0
 UNAUTHORIZED_HIGH_IMPACT_ACTIONS = 0
 ```
 
+## Accepted source-readiness lesson
+
+The M1-A source register makes source-readiness measurable at the seed-register layer, but measurability is not source authority.
+
+A complete placeholder record, schema-valid metadata and passing CI validation only prove that HosPrime has a governed control surface for future source intake. They do not prove that a source is authentic, current, owned, approved, access-safe, retrieval-ready or suitable for Organizational Memory.
+
+Accepted correction from Engineering Run 0013:
+
+```text
+A source register can make source-readiness measurable before ingestion,
+but it must remain separate from Organizational Memory and Governed RAG
+until real inventory, checksum evidence, owner confirmation and human review records exist.
+```
+
+Therefore, the following claims are prohibited until separately evidenced:
+
+```text
+SOURCE_APPROVED = false unless human review record exists
+SOURCE_INGESTED = false unless an ingestion receipt exists
+SOURCE_INDEX_READY = false unless approval and retrieval-readiness checks exist
+SOURCE_INDEXED = false unless an index activation audit event exists
+SOURCE_CAN_ANSWER_FACTUAL_QUESTIONS = false unless evidence retrieval and access gates pass
+```
+
 ## Minimum required reviewer identity
 
 A source promotion review must record a named accountable human reviewer or approved review body.
@@ -178,6 +202,7 @@ Person Memory = not modified
 Role Memory = not modified
 Research Staging = not modified
 Organizational Memory / Governed RAG = boundary documented only; no source promoted
+Repository engineering evidence = corrected with accepted source-readiness lesson
 ```
 
 External findings remain in Research Staging until authority, relevance and applicability are reviewed.
@@ -188,15 +213,19 @@ Personal or staff-twin material remains personal memory unless explicitly promot
 
 - Parent pipeline: #10
 - Review boundary issue: #17
+- Correct memory layer issue: #20
 - Controlled plan: #14
 - Prior evaluation evidence: `engineering_runs/2026-07-03/0009-m1-source-register-evaluate.md`
+- Observation evidence: `engineering_runs/2026-07-03/0012-m1-source-readiness-observe.md`
+- Accepted lesson: `engineering_runs/2026-07-03/0013-m1-source-readiness-learn.md`
 
 ## Status
 
 ```text
 HUMAN_REVIEW_BOUNDARY_DEFINED = true
+SOURCE_READINESS_LESSON_CORRECTED_IN_GOVERNANCE_DOC = true
 APPROVED_PLACEHOLDER_SOURCES = 0
 ACTIVE_RAG_INDEXED_RECORDS = 0
 FULL_M1_A_GATE_PASS_CLAIMED = false
-NEXT_STAGE = RELEASE
+NEXT_STAGE = NEXT_GOAL
 ```

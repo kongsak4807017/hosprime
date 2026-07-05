@@ -3,20 +3,20 @@
 Status: governance memory correction / non-Organizational-RAG artifact  
 Release target: Milestone 1 — Governed Knowledge Oracle MVP  
 Parent issue: #10  
-Control issue: #62  
-Previous stage: LEARN (#61)  
+Control issue: #77  
+Previous stage: LEARN (#76)  
 Current stage: CORRECT MEMORY LAYER  
 Next stage: NEXT GOAL
 
 ## Purpose
 
-This document preserves the learned boundary from the M1-B controlled source confirmation and role-assignment packet loops.
+This document preserves the learned boundary from the M1-B controlled source confirmation, role-assignment and source-owner collection-readiness packet loops.
 
-The released packet improves inventory discipline and role-assignment readiness discipline, but it does not confer source authority, approve sources, reduce the baseline confirmation gap, authorize ingestion, activate retrieval, permit factual answers, or promote anything into Organizational Memory / Governed RAG.
+The released packet improves inventory discipline, role-assignment readiness discipline and source-owner collection-readiness discipline, but it does not confer source authority, approve sources, reduce the baseline confirmation or decision-rights readiness gaps, authorize ingestion, activate retrieval, permit factual answers, or promote anything into Organizational Memory / Governed RAG.
 
 ## North Star linkage
 
-This correction supports the HosPrime North Star by preventing later runs from treating inventory paperwork or role-assignment collection paperwork as trusted organizational knowledge. That preserves evidence quality, user trust, decision-to-outcome traceability, knowledge reuse and zero unauthorized high-impact action.
+This correction supports the HosPrime North Star by preventing later runs from treating inventory paperwork, role-assignment collection paperwork or collection-readiness paperwork as trusted organizational knowledge. That preserves evidence quality, user trust, decision-to-outcome traceability, knowledge reuse and zero unauthorized high-impact action.
 
 ## Real user / real organizational work problem
 
@@ -30,7 +30,7 @@ Real users:
 
 Real work problem:
 
-The M1 source register still has five placeholder records and unresolved owner, reviewer, controlled-location, version/effective-date, checksum, provenance, conflict-of-interest, classification and access-policy confirmation gaps. Without a corrected memory boundary, future work could accidentally treat the released confirmation or role-assignment packet as source approval or RAG activation permission, creating unsupported factual answers and governance risk.
+The M1 source register still has five placeholder records and unresolved owner, reviewer, controlled-location, version/effective-date, checksum, provenance, conflict-of-interest, classification and access-policy confirmation gaps. The newer source-owner collection-readiness baseline also shows unresolved decision-rights readiness gaps. Without a corrected memory boundary, future work could accidentally treat a released confirmation, role-assignment or collection-readiness packet as source approval or RAG activation permission, creating unsupported factual answers and governance risk.
 
 ## Baseline preserved
 
@@ -44,6 +44,11 @@ BASELINE_GAP_RATE = 35 / 50 pending_or_missing_cells = 70%
 FULLY_CONFIRMED_RECORDS = 0 / 5
 ROLE_READINESS_GAP_RATE = 54.3%
 FULLY_ROLE_READY_RECORDS = 0 / 5
+DECISION_RIGHTS_READINESS_GAP_RATE = 50.0%
+FULLY_COLLECTION_READY_RECORDS = 0 / 5
+FULLY_REVIEW_READY_RECORDS = 0 / 5
+FULLY_APPROVED_RECORDS = 0 / 5
+ACTIVE_RAG_RECORDS = 0 / 5
 ```
 
 ## Corrected lesson
@@ -51,24 +56,34 @@ FULLY_ROLE_READY_RECORDS = 0 / 5
 ```text
 PACKET_IMPROVES_INVENTORY_DISCIPLINE = true
 PACKET_IMPROVES_ROLE_ASSIGNMENT_DISCIPLINE = true
+PACKET_IMPROVES_COLLECTION_READINESS_DISCIPLINE = true
 PACKET_CONFERS_SOURCE_AUTHORITY = false
 PACKET_CONFERS_ROLE_AUTHORITY = false
+RELEASED_PACKET_CONFERS_COLLECTION_EVIDENCE = false
+FILLED_PACKET_CONFERS_SOURCE_APPROVAL = false
+COLLECTION_READINESS_PRECHECK_CONFERS_INGESTION_PERMISSION = false
+SOURCE_APPROVAL_CONFERS_ACTIVE_RAG_ACTIVATION = false
+ACTIVE_RAG_ACTIVATION_REQUIRES_APPROVED_SOURCE_AND_RETRIEVAL_GATE = true
 BASELINE_GAP_RATE_REDUCED_BY_PACKET_RELEASE = false
 BASELINE_GAP_RATE_REDUCED_BY_PACKET_OBSERVATION = false
+DECISION_RIGHTS_READINESS_GAP_REDUCED_BY_PACKET_RELEASE = false
 CURRENT_CONFIRMATION_GAP_RATE = 70%
 CURRENT_ROLE_READINESS_GAP_RATE = 54.3%
+CURRENT_DECISION_RIGHTS_READINESS_GAP_RATE = 50.0%
 FULLY_CONFIRMED_RECORDS = 0 / 5
 FULLY_ROLE_READY_RECORDS = 0 / 5
+FULLY_COLLECTION_READY_RECORDS = 0 / 5
 INVENTORY_READINESS_IS_ORGANIZATIONAL_TRUTH = false
 ROLE_ASSIGNMENT_PACKET_IS_ORGANIZATIONAL_TRUTH = false
+COLLECTION_READINESS_PACKET_IS_ORGANIZATIONAL_TRUTH = false
 ORGANIZATIONAL_TRUTH_REQUIRES_REVIEW_RECORD = true
 ```
 
 ## Boundary rule
 
-Inventory confirmation and role-assignment collection are pre-review discipline artifacts only.
+Inventory confirmation, role-assignment collection and source-owner collection-readiness are pre-review discipline artifacts only.
 
-They may document whether a source owner or accountable office can identify ownership, controlled location, version/effective date, checksum status, classification and access policy, reviewer assignment, provenance, limitations and decision-rights readiness.
+They may document whether a source owner or accountable office can identify ownership, controlled location, version/effective date, checksum status, classification and access policy, reviewer assignment, provenance, limitations, decision-rights readiness, pending owners and next actions.
 
 They must not be interpreted as any of the following:
 
@@ -128,6 +143,35 @@ The operational meaning is narrow:
 3. Organizational RAG remains unchanged until reviewed source approval and activation evidence exist.
 4. The source register remains unchanged until a later authorized collection/review stage has real evidence.
 
+## Collection-readiness release-boundary lesson preserved from #76–#77
+
+The LEARN stage for the released source-owner collection-readiness packet established that operational clarity improved, but the source register still has no approved source and no active RAG record. This CORRECT MEMORY LAYER stage stores that release-boundary lesson in controlled governance memory only.
+
+```text
+RELEASED_PACKET != FILLED_PACKET
+FILLED_PACKET != SOURCE_APPROVAL
+COLLECTION_READINESS_PRECHECK != INGESTION_PERMISSION
+SOURCE_APPROVAL != ACTIVE_RAG_ACTIVATION
+ACTIVE_RAG_ACTIVATION_REQUIRES_APPROVED_SOURCE_AND_RETRIEVAL_GATE
+```
+
+Later filled-packet work may reduce the decision-rights readiness gap only when it contains real source-owner evidence and preserves explicit non-approval until a separate authorized review record exists.
+
+A later filled packet must fail closed when any of the following are missing or ambiguous:
+
+1. source register record identity;
+2. accountable source owner or accountable office;
+3. controlled source location or documented pending reason;
+4. version/source period and currentness statement;
+5. checksum or checksum-pending rationale;
+6. classification and role-scoped access policy;
+7. reviewer routing limited to collection-readiness precheck;
+8. conflict-of-interest check or declared non-applicability;
+9. explicit non-approval assertion;
+10. pending groups with accountable owner and next action.
+
+The collection-readiness packet remains outside Organizational Memory / Governed RAG until reviewed source approval, retrieval evaluation and activation evidence exist.
+
 ## Memory layer affected
 
 Affected:
@@ -152,8 +196,10 @@ Not affected:
 M1_B_CORRECT_MEMORY_LAYER_COMPLETED = true
 SOURCE_CONFIRMATION_BOUNDARY_PRESERVED = true
 ROLE_ASSIGNMENT_LESSON_MEMORY_BOUNDARY_RECORDED = true
+RELEASE_BOUNDARY_LESSON_RECORDED_IN_CONTROLLED_GOVERNANCE_MEMORY = true
 SOURCE_OWNER_EVIDENCE_COLLECTION_REMAINS_NEXT_PRACTICAL_WORK = true
 SOURCE_REGISTER_MODIFIED = false
+SOURCE_OWNER_EVIDENCE_COLLECTED = false
 SOURCE_APPROVAL_CLAIMED = false
 SOURCE_INGESTION_CLAIMED = false
 SOURCE_PARSING_CLAIMED = false
@@ -166,4 +212,4 @@ ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
 
 ## Single next stage
 
-NEXT GOAL — select the next bounded stage after preserving this memory boundary. The expected next practical direction is controlled source-owner evidence collection readiness, not ingestion planning or RAG activation.
+NEXT GOAL — select the next bounded stage after preserving this memory boundary. The expected next practical direction is controlled source-owner evidence collection execution readiness, not ingestion planning or RAG activation.

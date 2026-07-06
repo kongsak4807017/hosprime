@@ -1,13 +1,13 @@
 # M1-B Controlled Authorized Packet Execution Checklist
 
-Status: controlled BUILD artifact / checklist only / non-authoritative for source approval  
+Status: controlled RELEASE artifact / checklist guidance only / non-authoritative for source approval  
 Release target: Milestone 1 — Governed Knowledge Oracle MVP  
 Parent issue: #10  
 Memory epic: #8  
-Control issue: #115  
-Previous stage: PLAN (#114)  
-Current stage: BUILD  
-Next stage: TEST
+Control issue: #119  
+Previous stage: REVIEW (#118)  
+Current stage: RELEASE  
+Next stage: OBSERVE
 
 ## 1. Purpose and scope
 
@@ -15,7 +15,7 @@ This checklist gives a bounded, repeatable way to prepare later authorized sourc
 
 It supports the North Star by improving evidence quality, decision-rights traceability, knowledge reuse and zero unauthorized high-impact action before any source is approved, ingested, indexed, activated in RAG or promoted into Organizational Memory.
 
-This artifact is checklist guidance only. It does not fill a real source-owner packet and does not record any real-world execution outcome.
+This artifact is released as controlled checklist guidance only. It does not fill a real source-owner packet, authorize source-owner evidence collection, mutate the source register, approve sources, authorize ingestion, activate RAG, promote Organizational Memory or record any real-world execution outcome.
 
 ## 2. Non-authorization boundary
 
@@ -37,7 +37,23 @@ EXTERNAL_FINDINGS_PROMOTED_TO_ORGANIZATIONAL_TRUTH = false
 
 A completed packet-execution checklist is not source approval. Source approval requires a separate explicit human review decision with accountable reviewer identity, review record, limitations and gate evidence.
 
-## 3. Source scope
+## 3. Release boundary
+
+This RELEASE stage publishes the reviewed checklist as controlled guidance only.
+
+```text
+CONTROLLED_AUTHORIZED_PACKET_EXECUTION_GUIDANCE_RELEASED = true
+RELEASE_SCOPE = controlled_guidance_only
+RELEASE_MAY_AUTHORIZE_SOURCE_OWNER_PACKET_EXECUTION = false
+RELEASE_MAY_MUTATE_SOURCE_REGISTER = false
+RELEASE_MAY_APPROVE_SOURCE = false
+RELEASE_MAY_INGEST_PARSE_EMBED_OR_INDEX_SOURCE = false
+RELEASE_MAY_ACTIVATE_RAG = false
+RELEASE_MAY_PROMOTE_ORGANIZATIONAL_MEMORY = false
+RELEASE_MAY_CLAIM_REAL_WORLD_ACTION_COMPLETION = false
+```
+
+## 4. Source scope
 
 The checklist covers exactly these five current source IDs from `data/source_register/m1_source_register.yml`:
 
@@ -53,7 +69,7 @@ M1A-DIGITAL-001
 SOURCE_COUNT_COVERED_BY_CHECKLIST = 5 / 5
 ```
 
-## 4. Role separation matrix
+## 5. Role separation matrix
 
 | Role | May do in later authorized packet execution | Must not do |
 |---|---|---|
@@ -64,7 +80,7 @@ SOURCE_COUNT_COVERED_BY_CHECKLIST = 5 / 5
 | technical_ingestion_operator | later ingest only after source approval and technical gate | ingest before approval, activate retrieval without evaluation |
 | executive_sponsor | authorize request for source review | convert packet receipt into source approval or real-world completion |
 
-## 5. Packet field-group checklist
+## 6. Packet field-group checklist
 
 Every later authorized packet execution must check all ten field groups for every source record.
 
@@ -86,7 +102,7 @@ FIELD_GROUPS_PER_SOURCE = 10
 TOTAL_PACKET_FIELD_GROUPS_COVERED_BY_CHECKLIST = 5 sources x 10 groups = 50 / 50
 ```
 
-## 6. Per-source execution rows
+## 7. Per-source execution rows
 
 | Source ID | Knowledge pack | Required groups | Restricted handling note | Later authorized next action |
 |---|---|---:|---|---|
@@ -96,9 +112,9 @@ TOTAL_PACKET_FIELD_GROUPS_COVERED_BY_CHECKLIST = 5 sources x 10 groups = 50 / 50
 | M1A-EOC-001 | Disaster, EOC and Public Health Emergency Operations | 10 / 10 | restricted_internal; incident context possible | Prepare restricted packet and preserve operational sensitivity boundary |
 | M1A-DIGITAL-001 | Digital Health, Data Governance and AI Workflow | 10 / 10 | internal, role-scoped access | Prepare owner-confirmation packet without Organizational Memory promotion |
 
-## 7. Required receipt fields for later collection only
+## 8. Required receipt fields for later collection only
 
-A later authorized operator may use these receipt fields. This BUILD stage records no actual receipt.
+A later authorized operator may use these receipt fields only after a separate authorized packet-execution stage exists. This RELEASE stage records no actual receipt.
 
 ```text
 source_id
@@ -117,7 +133,7 @@ reviewer_routing_target
 non_approval_boundary_acknowledgement
 ```
 
-## 8. Review precheck gate
+## 9. Review precheck gate
 
 A packet can move to independent review precheck only when:
 
@@ -130,7 +146,7 @@ ACCESS_POLICY_EXPANSION_ATTEMPTED = false
 RAG_ACTIVATION_ATTEMPTED = false
 ```
 
-## 9. Prohibited claims
+## 10. Prohibited claims
 
 The following claims are prohibited from this checklist and from later packet execution unless separate gate evidence exists:
 
@@ -146,34 +162,32 @@ PROHIBITED_CLAIM_ORGANIZATIONAL_MEMORY_PROMOTED = true
 PROHIBITED_CLAIM_REAL_WORLD_ACTION_COMPLETED_WITHOUT_RECEIPT_AUDIT_AND_OBSERVED_OUTCOME = true
 ```
 
-## 10. Next-stage TEST criteria
+## 11. Next-stage OBSERVE criteria
 
-The next TEST stage should verify:
+The next OBSERVE stage should verify whether the released guidance remains bounded as guidance only.
 
 ```text
-CHECKLIST_FILE_EXISTS = true
-SOURCE_COUNT_COVERED_BY_CHECKLIST = 5 / 5
-PACKET_FIELD_GROUPS_COVERED_BY_CHECKLIST = 50 / 50
-ROLE_SEPARATION_MATRIX_PRESENT = true
-NON_AUTHORIZATION_BOUNDARY_PRESENT = true
-PROHIBITED_CLAIMS_PRESENT = true
+CHECKLIST_STATUS_RELEASED_AS_GUIDANCE_ONLY = true
+RELEASE_BOUNDARY_VISIBLE = true
 SOURCE_REGISTER_MODIFIED = false
 SOURCE_OWNER_EVIDENCE_COLLECTED = false
 SOURCE_APPROVAL_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
+ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
 CI_PASS_CLAIMED_ONLY_IF_WORKFLOW_EVIDENCE_EXISTS = true
 ```
 
-## 11. Acceptance result for this BUILD artifact
+## 12. Acceptance result for this RELEASE artifact
 
 ```text
-M1_B_BUILD_COMPLETED = true
-CONTROLLED_AUTHORIZED_PACKET_EXECUTION_CHECKLIST_CREATED = true
+M1_B_RELEASE_COMPLETED = true
+CONTROLLED_AUTHORIZED_PACKET_EXECUTION_GUIDANCE_RELEASED = true
+RELEASE_SCOPE = controlled_guidance_only
 SOURCE_COUNT_COVERED_BY_CHECKLIST = 5 / 5
 PACKET_FIELD_GROUPS_COVERED_BY_CHECKLIST = 50 / 50
 SOURCE_REGISTER_MODIFIED = false
 SOURCE_OWNER_EVIDENCE_COLLECTED = false
 SOURCE_APPROVAL_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
-NEXT_STAGE = TEST
+NEXT_STAGE = OBSERVE
 ```

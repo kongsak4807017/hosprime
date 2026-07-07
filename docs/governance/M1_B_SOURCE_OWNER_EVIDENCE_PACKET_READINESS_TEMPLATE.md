@@ -1,10 +1,14 @@
 # M1-B Source-Owner Evidence Packet Readiness Template
 
-Status: BUILD artifact
+Status: RELEASED CONTROLLED GUIDANCE ONLY
 Release target: Milestone 1 — Governed Knowledge Oracle MVP
 Register linkage: `data/source_register/m1_source_register.yml`
-Controlling issue: #130
-Previous evidence: `engineering_runs/2026-07-07/0111-m1b-source-owner-evidence-packet-readiness-plan.md`
+Controlling issue: #134
+Build evidence: `engineering_runs/2026-07-07/0112-m1b-source-owner-evidence-packet-readiness-build.md`
+Test evidence: `engineering_runs/2026-07-07/0113-m1b-source-owner-evidence-packet-readiness-test.md`
+Evaluate evidence: `engineering_runs/2026-07-07/0114-m1b-source-owner-evidence-packet-readiness-evaluate.md`
+Review evidence: `engineering_runs/2026-07-07/0115-m1b-source-owner-evidence-packet-readiness-review.md`
+Release scope: controlled readiness guidance only
 
 ## 1. Purpose
 
@@ -14,7 +18,7 @@ It exists to reduce ambiguity before any later source-owner evidence collection,
 
 ## 2. Non-authorization boundary
 
-Completing this template does **not** authorize any of the following:
+Completing or releasing this template does **not** authorize any of the following:
 
 ```text
 source_approved = false
@@ -262,21 +266,25 @@ ROLE_MEMORY_AFFECTED = false
 
 External findings, packet drafts and pending owner information remain in Research Staging or issue evidence until reviewed. They must not be treated as approved Organizational Memory, Role Memory, Personal Memory, or active Governed RAG content.
 
-## 11. Later TEST acceptance outputs
-
-The later TEST stage should verify the following:
+## 11. Release acceptance outputs
 
 ```text
-TEMPLATE_FILE_EXISTS = true
-TEN_FIELD_GROUPS_REPRESENTED = true
-AMBIGUITY_BOUNDARY_ACKNOWLEDGEMENTS_INCLUDED = true
-SAFE_FAIL_CHECKLIST_INCLUDED = true
-PROHIBITED_CLAIMS_DEFAULT_FALSE = true
+M1_B_RELEASE_COMPLETED = true
+TEMPLATE_STATUS = RELEASED CONTROLLED GUIDANCE ONLY
+RELEASE_SCOPE = controlled_readiness_guidance_only
 SOURCE_REGISTER_MODIFIED = false
 SOURCE_OWNER_EVIDENCE_COLLECTED = false
 SOURCE_OWNER_PERSON_NAMED = false
 SOURCE_APPROVAL_CLAIMED = false
+SOURCE_INGESTION_CLAIMED = false
+SOURCE_PARSING_CLAIMED = false
+SOURCE_EMBEDDING_CLAIMED = false
+SOURCE_INDEXING_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
+ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
+FACTUAL_ANSWER_PERMISSION_CLAIMED = false
+CI_PASS_CLAIMED = false
+REAL_WORLD_EXECUTION_CLAIMED = false
 ```
 
 ## 12. Explicit limitations

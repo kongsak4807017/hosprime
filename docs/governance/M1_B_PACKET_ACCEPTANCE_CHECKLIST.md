@@ -1,10 +1,15 @@
 # M1-B Packet Acceptance Checklist
 
-Status: controlled non-authorizing BUILD artifact
+Status: controlled non-authorizing RELEASE artifact
 
 Release target: Milestone 1 — Governed Knowledge Oracle MVP
 
 Controlling issue: #154
+
+Release evidence:
+
+- `engineering_runs/2026-07-09/0146-m1b-packet-acceptance-checklist-release.md`
+- `engineering_runs/2026-07-09/0145-m1b-packet-acceptance-checklist-review.md`
 
 Build evidence:
 
@@ -185,7 +190,7 @@ Organizational Memory / Governed RAG = not affected
 
 ## 11. TEST-stage acceptance criteria
 
-The next TEST stage should verify this checklist against the planned BUILD criteria:
+The TEST stage verified this checklist against the planned BUILD criteria:
 
 ```text
 M1_B_PACKET_ACCEPTANCE_CHECKLIST_CREATED = true
@@ -202,11 +207,12 @@ RAG_ACTIVATION_CLAIMED = false
 ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
 ```
 
-## 12. BUILD acceptance status
+## 12. RELEASE acceptance status
 
 ```text
-CURRENT_STAGE = BUILD
-M1_B_PACKET_ACCEPTANCE_CHECKLIST_CREATED = true
+CURRENT_STAGE = RELEASE
+M1_B_PACKET_ACCEPTANCE_CHECKLIST_RELEASED = true
+RELEASE_DECISION = released_as_controlled_non_authorizing_guidance_only
 CHECKLIST_IS_NON_AUTHORIZING = true
 CHECKLIST_HAS_SEED_SOURCE_ID_LINKAGE = true
 CHECKLIST_HAS_RECEIPT_OR_PENDING_REASON_FIELDS = true
@@ -227,5 +233,5 @@ FACTUAL_ANSWER_PERMISSION_CLAIMED = false
 CI_PASS_CLAIMED = false
 REAL_USER_ACCEPTANCE_CLAIMED = false
 REAL_WORLD_EXECUTION_CLAIMED = false
-NEXT_STAGE = TEST
+NEXT_STAGE = OBSERVE
 ```

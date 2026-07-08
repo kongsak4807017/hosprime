@@ -1,10 +1,15 @@
 # M1-B Source-Owner Evidence Packet Completion Workflow
 
-Status: controlled non-authorizing workflow artifact
+Status: released controlled non-authorizing guidance
 
 Release target: Milestone 1 — Governed Knowledge Oracle MVP
 
-Controlling issue: #145
+Controlling issues: #145 BUILD, #148 REVIEW, #149 RELEASE
+
+Release evidence:
+
+- `engineering_runs/2026-07-08/0130-m1b-source-owner-evidence-packet-completion-review.md`
+- `engineering_runs/2026-07-08/0131-m1b-source-owner-evidence-packet-completion-release.md`
 
 Previous loop evidence:
 
@@ -18,6 +23,8 @@ Previous loop evidence:
 This workflow converts the M1-B plan into a controlled, role-based, receipt-driven packet completion artifact for the five Milestone 1 seed records.
 
 It is designed to help healthcare and public-health organizations prepare source-owner evidence packets before any later human review, approval, ingestion, indexing, active RAG use, Organizational Memory promotion, factual-answer permission, or real-world execution claim.
+
+This released guidance is non-authorizing. It may be used only to structure later packet-completion work that has its own authorized collection route, receipt evidence, review gate, and audit record.
 
 ## 2. Non-authorization boundary
 
@@ -88,7 +95,7 @@ SOURCE_RECORDS_WITH_APPROVAL_STATUS_APPROVED_TARGET = 0/5 until a separate revie
 SOURCE_RECORDS_WITH_ACTIVE_RAG_INDEX_TARGET = 0/5 until a separate ingestion/indexing/release path
 ```
 
-This BUILD artifact does not achieve those later targets. It only creates the workflow controls needed to attempt them safely in later stages.
+This released workflow does not achieve those later targets. It only creates the workflow controls needed to attempt them safely in later stages.
 
 ## 6. Packet completion workflow
 
@@ -156,23 +163,31 @@ SOURCE_APPROVAL_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
 ```
 
-## 12. BUILD acceptance status
+## 12. RELEASE acceptance status
 
 ```text
-BUILD_ARTIFACT_CREATED = true
-TEN_PACKET_FIELD_GROUPS_INCLUDED = true
-AUTHORIZED_COLLECTION_ROUTE_REQUIREMENTS_INCLUDED = true
-RECEIPT_ARTIFACT_REQUIREMENTS_INCLUDED = true
-RESPONSIBLE_ROLE_REQUIREMENTS_INCLUDED = true
-REVIEWER_HANDOFF_CONDITIONS_INCLUDED = true
-FAIL_CLOSED_RULES_INCLUDED = true
-APPROVAL_BOUNDARY_EXPLICIT = true
-RAG_BOUNDARY_EXPLICIT = true
-MEMORY_BOUNDARY_EXPLICIT = true
+M1_B_RELEASE_COMPLETED = true
+SOURCE_OWNER_PACKET_COMPLETION_WORKFLOW_RELEASED = true
+RELEASE_SCOPE = controlled_non_authorizing_guidance_only
+GUIDANCE_DISCOVERABLE_IN_DOC = true
+REVIEW_EVIDENCE_LINKED = true
+RELEASE_EVIDENCE_LINKED = true
 SOURCE_REGISTER_MODIFIED = false
 SOURCE_OWNER_EVIDENCE_COLLECTED = false
 SOURCE_OWNER_PERSON_NAMED = false
 SOURCE_APPROVAL_CLAIMED = false
+SOURCE_INGESTION_CLAIMED = false
+SOURCE_PARSING_CLAIMED = false
+SOURCE_EMBEDDING_CLAIMED = false
+SOURCE_INDEXING_CLAIMED = false
 RAG_ACTIVATION_CLAIMED = false
+ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
+FACTUAL_ANSWER_PERMISSION_CLAIMED = false
+CI_PASS_CLAIMED = false
 REAL_WORLD_EXECUTION_CLAIMED = false
+NEXT_STAGE = OBSERVE
 ```
+
+## 13. Single next stage
+
+OBSERVE — observe whether the released guidance is discoverable and unambiguous for later authorized packet-completion planning, without executing packet completion, mutating the source register, collecting source-owner evidence, approving sources, activating RAG, promoting Organizational Memory, claiming CI success, or claiming real-world execution completion.

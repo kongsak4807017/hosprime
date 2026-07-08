@@ -45,7 +45,9 @@ Supporting measures include:
 
 ## Product priority
 
-The first product is **HosPrime Executive Office**, supported by:
+The first **deployable** product is **HosPrime Personal Twin OS v0.1**.
+
+The first **institutional** product remains **HosPrime Executive Office**, supported by:
 
 1. Governed Knowledge Oracle
 2. Personal and Staff Twin Memory
@@ -54,7 +56,82 @@ The first product is **HosPrime Executive Office**, supported by:
 5. Meeting → Decision → Action → Outcome → Lesson loop
 6. Evidence, audit, cost control and human approval
 
-The product must demonstrate practical value before expanding agent count, autonomous action, forecasting or national-scale federation.
+The project must demonstrate practical value in a personal daily-use environment before expanding agent count, autonomous action, forecasting or national-scale federation.
+
+## Current 20-day execution focus
+
+**Milestone 0 — Personal Twin OS v0.1**
+
+Purpose: create a usable personal digital twin and graph-memory workspace that can be run locally, improved every loop, and later expanded into Staff Twin, Role Twin, Hospital Twin, Province Twin and Region Twin.
+
+Target operating model:
+
+```text
+git clone
+-> docker compose up
+-> open local workspace
+-> create / inspect Personal Twin
+-> sync Markdown / Obsidian vault
+-> build graph memory
+-> query memory with evidence
+-> record tasks, decisions and lessons
+```
+
+Twenty days at 24 hourly loop opportunities per day creates up to **480 bounded engineering loops**. Each loop must move one usable capability forward or record a clear blocker.
+
+## Project progression board
+
+Status legend:
+
+```text
+DONE      = usable or released with evidence
+NOW       = current active milestone
+NEXT      = next executable work
+WAITING   = depends on prior milestone
+EXPERIMENT= allowed only as prototype / sandbox
+```
+
+| Milestone | Focus | Status | Acceptance signal |
+|---|---|---:|---|
+| M0 | Personal Twin OS v0.1 | NOW | Local app can run, hold personal memory, build graph memory, and answer with evidence |
+| M0.1 | README progression board | DONE | Front page shows current milestone, completed work, next work and boundaries |
+| M0.2 | Local vault structure | NEXT | `vault/` structure supports Person, Project, Task, Decision, Meeting, Source and Lesson notes |
+| M0.3 | Obsidian-compatible graph memory | WAITING | Markdown notes create usable backlinks and graph navigation |
+| M0.4 | Personal memory schema | WAITING | Person, Role, Project, Task, Decision and Lesson objects are defined and persisted |
+| M0.5 | Local vector memory | WAITING | Approved local notes can be embedded and searched without promoting external claims |
+| M0.6 | Personal Twin API | WAITING | API exposes profile, memory, graph, task and decision endpoints |
+| M0.7 | Personal Twin UI | WAITING | Browser UI shows profile, graph, timeline, tasks, decisions and knowledge search |
+| M0.8 | Docker Compose local deploy | WAITING | Windows, macOS and Linux can run the same local stack |
+| M0.9 | Daily-use loop | WAITING | User can capture work, ask memory-backed questions, and record lessons daily |
+| M0.10 | Personal Twin v0.1 release candidate | WAITING | `git clone -> docker compose up` works with documented limitations |
+| M1 | Governed Knowledge Oracle MVP | WAITING | Approved documents can be ingested, retrieved and cited with access control and audit |
+| M2 | Staff / Role Twin | WAITING | Person Memory, Staff Twin and Role Memory are separated and permissioned |
+| M3 | Executive Office | WAITING | Executive, Planner, Analyst, Knowledge and Action agents support real work loops |
+| M4 | Backoffice AI Workforce and AIOC | WAITING | Finance, HR, procurement, quality and security agents run under governance |
+| M5 | Hospital / Province / Region Twin | WAITING | Aggregated intelligence scales without sharing patient-level data by default |
+
+## Token economy rules
+
+The project must spend tokens on usable progress, not repetition.
+
+Default loop context should include only:
+
+```text
+README.md
+current issue or current milestone note
+last 3 relevant engineering runs
+files directly affected by the selected next step
+test or error output when available
+```
+
+Rules:
+
+1. Do not read the whole repository unless the selected step requires it.
+2. Do not create long governance documents when a small runnable artifact is more valuable.
+3. Prefer one file, one test, one endpoint, one screen, or one documented blocker per loop.
+4. Keep Research Staging separate from Personal Memory, Role Memory and Organizational Memory.
+5. Never claim deployability, test success, source approval, RAG activation or real-world execution without evidence.
+6. Target normal engineering loops at approximately 20k–60k tokens; allow larger loops only for code-heavy build or debugging work with a stated reason.
 
 ## Loop Engineering
 
@@ -120,6 +197,12 @@ The repository contains prototypes for Knowledge Oracle, Meeting Memory, Digital
 
 The current controlled release target is:
 
+**Milestone 0 — Personal Twin OS v0.1**
+
+A successful Milestone 0 must provide a locally runnable personal twin with Markdown/Obsidian-compatible graph memory, local persistence, memory-backed Q&A with evidence boundaries, task/decision/lesson capture, and a documented path to Staff Twin and Organizational Memory.
+
+Institutional Milestone 1 remains:
+
 **Milestone 1 — Governed Knowledge Oracle MVP**
 
 A successful Milestone 1 must ingest approved documents, retrieve evidence, answer only when evidence is sufficient, provide traceable citations, enforce access control, and record audit and cost data.
@@ -175,8 +258,9 @@ Important references:
 ## Milestone sequence
 
 ```text
+M0 Personal Twin OS v0.1
 M1 Governed Knowledge Oracle
-M2 Organization Memory
+M2 Staff / Role Twin and Organization Memory
 M3 Executive Office and Role Twin
 M4 Backoffice AI Workforce and AIOC
 M5 Forecast, Scenario and Provincial Health Brain

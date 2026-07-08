@@ -101,7 +101,9 @@ EXPERIMENT= allowed only as prototype / sandbox
 | M0.5 | Local vector memory | WAITING | Approved local notes can be embedded and searched without promoting external claims |
 | M0.6 | Personal Twin API | WAITING | API exposes profile, memory, graph, task and decision endpoints |
 | M0.7 | Personal Twin UI | WAITING | Browser UI shows profile, graph, timeline, tasks, decisions and knowledge search |
-| M0.8 | Docker Compose local deploy | WAITING | Windows, macOS and Linux can run the same local stack |
+| M0.8 | Cross-platform local deploy | WAITING | Windows, macOS and Linux can run the same GitHub source with Docker Compose |
+| M0.8a | Admin update verification | WAITING | Admin user can verify version, commit SHA, migration status, health checks and last update result |
+| M0.8b | Update test workflow | WAITING | Every update records build/test output and admin-side verification evidence |
 | M0.9 | Daily-use loop | WAITING | User can capture work, ask memory-backed questions, and record lessons daily |
 | M0.10 | Personal Twin v0.1 release candidate | WAITING | `git clone -> docker compose up` works with documented limitations |
 | M1 | Governed Knowledge Oracle MVP | WAITING | Approved documents can be ingested, retrieved and cited with access control and audit |
@@ -109,6 +111,71 @@ EXPERIMENT= allowed only as prototype / sandbox
 | M3 | Executive Office | WAITING | Executive, Planner, Analyst, Knowledge and Action agents support real work loops |
 | M4 | Backoffice AI Workforce and AIOC | WAITING | Finance, HR, procurement, quality and security agents run under governance |
 | M5 | Hospital / Province / Region Twin | WAITING | Aggregated intelligence scales without sharing patient-level data by default |
+
+## Cross-platform deploy and update verification contract
+
+All deployable source code must live in this GitHub repository and remain runnable from the repository without hidden local-only steps.
+
+Supported local targets for Milestone 0:
+
+```text
+Windows 11 + Docker Desktop
+macOS + Docker Desktop
+Linux + Docker Engine / Docker Compose
+```
+
+Minimum required deploy artifacts:
+
+```text
+docker-compose.yml
+.env.example
+scripts/bootstrap.ps1
+scripts/bootstrap.sh
+scripts/healthcheck.ps1
+scripts/healthcheck.sh
+admin release / update verification screen
+```
+
+Milestone 0 deploy acceptance flow:
+
+```text
+git clone
+-> copy .env.example to .env
+-> docker compose up --build
+-> backend health check passes
+-> frontend opens locally
+-> admin user can log in
+-> admin user can verify running version and update status
+```
+
+The admin verification screen must show at minimum:
+
+```text
+application version
+git commit SHA
+backend build/version
+frontend build/version
+database migration status
+service health
+memory index status
+last update time
+last update result
+last test result
+known limitations
+```
+
+Every update must leave evidence before it can be marked complete:
+
+```text
+GitHub commit or pull request
+changed files summary
+build result
+test result
+admin verification result
+known regression or blocker, if any
+```
+
+No update is considered done only because code was committed. It must be observable by an admin user or explicitly recorded as blocked.
 
 ## Token economy rules
 
@@ -199,7 +266,7 @@ The current controlled release target is:
 
 **Milestone 0 — Personal Twin OS v0.1**
 
-A successful Milestone 0 must provide a locally runnable personal twin with Markdown/Obsidian-compatible graph memory, local persistence, memory-backed Q&A with evidence boundaries, task/decision/lesson capture, and a documented path to Staff Twin and Organizational Memory.
+A successful Milestone 0 must provide a locally runnable personal twin with Markdown/Obsidian-compatible graph memory, local persistence, memory-backed Q&A with evidence boundaries, task/decision/lesson capture, cross-platform deploy instructions, admin-side update verification, and a documented path to Staff Twin and Organizational Memory.
 
 Institutional Milestone 1 remains:
 

@@ -95,8 +95,8 @@ EXPERIMENT= allowed only as prototype / sandbox
 |---|---|---:|---|
 | M0 | Personal Twin OS v0.1 | NOW | Local app can run, hold personal memory, build graph memory, and answer with evidence |
 | M0.1 | README progression board | DONE | Front page shows current milestone, completed work, next work and boundaries |
-| M0.2 | Local vault structure | NEXT | `vault/` structure supports Person, Project, Task, Decision, Meeting, Source and Lesson notes |
-| M0.3 | Obsidian-compatible graph memory | WAITING | Markdown notes create usable backlinks and graph navigation |
+| M0.2 | Local vault structure | DONE | `vault/` structure supports Person, Project, Task, Decision, Meeting, Source and Lesson notes |
+| M0.3 | Obsidian-compatible graph memory | NEXT | Markdown notes create usable backlinks and graph navigation |
 | M0.4 | Personal memory schema | WAITING | Person, Role, Project, Task, Decision and Lesson objects are defined and persisted |
 | M0.5 | Local vector memory | WAITING | Approved local notes can be embedded and searched without promoting external claims |
 | M0.6 | Personal Twin API | WAITING | API exposes profile, memory, graph, task and decision endpoints |

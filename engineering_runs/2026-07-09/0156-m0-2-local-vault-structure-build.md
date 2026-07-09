@@ -83,6 +83,7 @@ Internal evidence:
 - open PR lookup: no open PRs observed
 - latest PLAN run: `engineering_runs/2026-07-09/0155-m0-2-local-vault-structure-plan.md`
 - repository code search for existing vault contract before build
+- workflow run lookup for evidence commit `8db8c0ab0819df7ab673d9e38a6da24357294629`: no workflow runs observed
 
 Research staging evidence carried forward only from run 0153:
 
@@ -139,6 +140,7 @@ cfd9b08754e9256631125229aed35628bfb8502f — storage/personal_memory/example-per
 9f4e06f53a14530f20efaed9ef31395e4436a977 — meetings/.gitkeep
 ac545982ecacae6fb647366280fe807edc1e40a7 — sources/.gitkeep
 35dc8faf4f87c9872b3bfbb13af64d58801e615c — lessons/.gitkeep
+8db8c0ab0819df7ab673d9e38a6da24357294629 — BUILD evidence file
 ```
 
 ## Acceptance result for BUILD
@@ -149,7 +151,8 @@ README_READ = true
 OPEN_ISSUES_INSPECTED = true
 OPEN_PRS_INSPECTED = true
 RECENT_ENGINEERING_RUN_INSPECTED = true
-CI_STATUS_INSPECTED = pending final evidence commit lookup
+CI_STATUS_INSPECTED = true
+WORKFLOW_RUNS_FOR_EVIDENCE_COMMIT = []
 BUILD_SCOPE_LIMITED_TO_REPOSITORY_VAULT_CONTRACT = true
 STORAGE_PERSONAL_MEMORY_README_CREATED = true
 EXAMPLE_PERSON_README_CREATED = true
@@ -178,6 +181,7 @@ CODE_CHANGED = true
 DOCUMENTATION_CONTRACT_ADDED = true
 AUTOMATED_TESTS_RUN = false
 RUNTIME_DEPLOY_TEST_RUN = false
+WORKFLOW_RUNS_FOR_EVIDENCE_COMMIT = []
 CI_PASS_CLAIMED = false
 ```
 

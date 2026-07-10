@@ -1,0 +1,154 @@
+# M0.3 Obsidian Runtime/User Observation Gate
+# Non-executing evidence template. Blank, false, unknown, or omitted mandatory
+# fields must never be interpreted as authorization, execution, acceptance, or pass.
+
+schema_version: "0.1"
+receipt_status: "DRAFT_NOT_AUTHORIZED" # allowed: DRAFT_NOT_AUTHORIZED, AUTHORIZED_NOT_RUN, RUN_RECORDED, STOPPED, INCONCLUSIVE
+trial_id: null
+controlling_issue: "https://github.com/kongsak4807017/hosprime/issues/157"
+plan_evidence: "engineering_runs/2026-07-10/0185-m0-3-runtime-observation-gate-plan.md"
+
+scope:
+  milestone: "M0.3 Obsidian-compatible graph memory"
+  approved_synthetic_only: false
+  fixture_root: "storage/personal_memory/example-person/vault"
+  approved_repository_sha: null
+  approved_execution_window:
+    starts_at: null
+    ends_at: null
+  prohibited_actions:
+    - "Use real personal, staff, patient, or confidential organizational data"
+    - "Modify fixture content during the trial"
+    - "Activate RAG or promote content to Organizational Memory"
+    - "Claim user acceptance from technical observation alone"
+    - "Perform any high-impact action"
+
+A_authorization_receipt:
+  repository_owner_or_delegated_authorizer: null
+  technical_executor_identity_or_role: null
+  manager_participant_identity_or_role: null
+  acceptance_authority_identity_or_role: null
+  consent_or_delegation_reference: null
+  approved_fixture_path: "storage/personal_memory/example-person/vault"
+  approved_repository_commit_sha: null
+  approved_execution_window_reference: null
+  authorization_timestamp: null
+  authorization_complete: false
+
+B_fixture_version_receipt:
+  checked_out_repository_sha: null
+  sha_matches_authorization: false
+  fixture_root: "storage/personal_memory/example-person/vault"
+  expected_files:
+    - "meetings/m0-3-demo-meeting.md"
+    - "decisions/m0-3-demo-decision.md"
+    - "tasks/m0-3-demo-task.md"
+    - "sources/m0-3-demo-source-reference.md"
+    - "lessons/m0-3-demo-lesson.md"
+  expected_files_present_count: null
+  expected_files_total: 5
+  fixture_hash_or_diff_reference: null
+  unreviewed_fixture_change_detected: null
+  real_personal_staff_patient_or_confidential_data_present: null
+  preflight_result: "NOT_RUN" # PASS, FAIL, NOT_RUN
+
+C_runtime_environment_receipt:
+  operating_system_and_version: null
+  obsidian_version: null
+  vault_open_method: "existing local folder"
+  backlinks_core_plugin_enabled: null
+  graph_view_core_plugin_enabled: null
+  community_plugins_used: []
+  graph_mode: null # global or local
+  local_graph_depth: null
+  graph_search_or_filter_expression: null
+  existing_files_only_setting: null
+  excluded_file_patterns: []
+  fixture_root_path_observed: null
+  trial_started_at: null
+  trial_ended_at: null
+  settings_complete: false
+
+D_technical_observation_receipt:
+  notes_visible:
+    observed_count: null
+    expected_count: 5
+  selected_path_transitions:
+    - from: "m0-3-demo-meeting"
+      to: "m0-3-demo-decision"
+      intended_note_opened: null
+    - from: "m0-3-demo-decision"
+      to: "m0-3-demo-task"
+      intended_note_opened: null
+    - from: "m0-3-demo-decision"
+      to: "m0-3-demo-source-reference"
+      intended_note_opened: null
+    - from: "m0-3-demo-task"
+      to: "m0-3-demo-lesson"
+      intended_note_opened: null
+  backlinks:
+    expected_linked_mention_observed: null
+    observation_reference: null
+  graph:
+    expected_nodes_visible_count: null
+    expected_nodes_total: 5
+    selected_relationships_visible_count: null
+    selected_relationships_total: 4
+    graph_node_navigation_succeeded: null
+  broken_links_on_selected_path: null
+  technical_observation_complete: false
+
+E_manager_task_receipt:
+  authorized_participant_role: null
+  task_started_at: null
+  task_ended_at: null
+  measured_duration_seconds: null
+  executor_intervention_count: null
+  transitions_completed_count: null
+  transitions_total: 4
+  recovered_chain_summary: null
+  task_completed_without_executor_intervention: null
+  participant_acceptance_decision: null # accepted or rejected
+  participant_rationale_summary: null
+  governance_incident_count: null
+  manager_task_complete: false
+
+F_acceptance_review_receipt:
+  acceptance_authority_identity_or_role: null
+  reviewed_artifacts:
+    authorization_receipt: false
+    fixture_version_receipt: false
+    runtime_environment_receipt: false
+    technical_observation_receipt: false
+    manager_task_receipt: false
+    incident_or_blocker_receipt: false
+  decision: "NOT_REVIEWED" # ACCEPTED_FOR_M0_3_EVALUATION, REJECTED_WITH_REASONS, INCONCLUSIVE_WITH_MISSING_EVIDENCE
+  rationale: null
+  reviewed_at: null
+
+G_incident_or_blocker_receipt:
+  stop_condition_triggered: false
+  stop_condition: null
+  incident_or_blocker_description: null
+  accountable_owner_role: null
+  next_bounded_correction: null
+  recorded_at: null
+
+computed_gate_summary:
+  # This section must be completed by later TEST/EVALUATE work from observed receipts.
+  authorization_complete: false
+  evidence_package_complete: false
+  authorized_runtime_trial_attempted: false
+  authorized_manager_trial_attempted: false
+  trusted_task_completion_rate_numerator: null
+  trusted_task_completion_rate_denominator: null
+  result: "NOT_EVALUATED" # PASS, FAIL, INCONCLUSIVE, NOT_EVALUATED
+  unauthorized_high_impact_actions: null
+  material_governance_incidents: null
+  m0_3_done_claimed: false
+
+attestations:
+  technical_executor: null
+  manager_participant: null
+  acceptance_authority: null
+  evidence_recorded_at: null

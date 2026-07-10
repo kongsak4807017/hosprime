@@ -1,8 +1,8 @@
 # Personal Twin Vault Contract
 
-This vault is the minimal Milestone 0.2 Markdown / Obsidian-compatible structure for local Personal Twin OS v0.1 development.
+This vault is the minimal Markdown / Obsidian-compatible structure for local Personal Twin OS v0.1 development.
 
-It is a repository-visible contract only. It does not contain real notes, real personal memory, organizational truth, approved sources, patient data, embeddings, indexes, API endpoints, UI screens, deploy evidence, or active RAG.
+It is a repository-visible contract and synthetic example only. It does not contain real notes, real personal memory, organizational truth, approved sources, patient data, embeddings, indexes, API endpoints, UI screens, deploy evidence, runtime Obsidian validation, user acceptance, or active RAG.
 
 ## Required folders
 
@@ -16,11 +16,25 @@ sources/
 lessons/
 ```
 
-Each folder is kept with `.gitkeep` only during this BUILD stage.
+## Current example state
+
+Milestone 0.2 established the required vault folders as a local Personal Twin OS structure.
+
+Milestone 0.3 added a non-sensitive synthetic fixture chain to demonstrate the repository-local text contract for Obsidian-style graph navigation:
+
+```text
+meetings/m0-3-demo-meeting.md
+-> decisions/m0-3-demo-decision.md
+-> tasks/m0-3-demo-task.md
+-> sources/m0-3-demo-source-reference.md
+-> lessons/m0-3-demo-lesson.md
+```
+
+These fixture notes are examples only. They are not real Personal / Staff Twin Memory, approved organizational knowledge, runtime Obsidian graph-rendering evidence, CI evidence, user acceptance evidence, source-owner approval, RAG activation, or real-world execution evidence.
 
 ## Folder intent
 
-| Folder | Future note type | Boundary |
+| Folder | Note type | Boundary |
 |---|---|---|
 | `people/` | `person` | Local personal context only; not an identity authority. |
 | `projects/` | `project` | Local project memory only; not an approved organizational plan. |
@@ -52,10 +66,18 @@ version: "0.1"
 
 ## Graph-link boundary
 
-Obsidian-style links and backlinks are navigation aids. They are not proof of factual correctness, source approval, user acceptance, execution, clinical validity, organizational approval, or governance review.
+Obsidian-style links and backlinks are navigation aids. They are not proof of factual correctness, source approval, user acceptance, execution, clinical validity, organizational approval, runtime memory, RAG activation, or governance review.
 
 ```text
 GRAPH_LINKS_ARE_NAVIGATION_NOT_PROOF = true
+OBSIDIAN_RUNTIME_EXECUTED = false
+OBSIDIAN_GRAPH_RENDERING_OBSERVED = false
+CI_PASS_CLAIMED = false
+REAL_USER_ACCEPTANCE_CLAIMED = false
+SOURCE_APPROVAL_CLAIMED = false
+RAG_ACTIVATION_CLAIMED = false
+ORGANIZATIONAL_MEMORY_PROMOTION_CLAIMED = false
+REAL_WORLD_EXECUTION_CLAIMED = false
 ```
 
 ## Promotion boundary

@@ -1,0 +1,202 @@
+# M0.3 Trial Readiness Record Template
+# Non-executing control artifact. This file does not authorize a trial, record
+# consent, open an execution window, prove runtime success, or mark M0.3 done.
+# Missing, blank, pending, expired, revoked, invalid, or conflicted evidence
+# must always derive TRIAL_READY = false.
+
+record_control:
+  schema_name: "M0_3_TRIAL_READINESS_RECORD"
+  schema_version: "0.1"
+  record_id: null
+  created_at: null
+  updated_at: null
+  lifecycle_state: "DRAFT" # DRAFT, PENDING_REVIEW, APPROVED_NOT_ACTIVE, ACTIVE_WITHIN_WINDOW, REVOKED, EXPIRED, CLOSED
+  controlling_issue: "https://github.com/kongsak4807017/hosprime/issues/158"
+  milestone: "M0.3 Obsidian-compatible graph memory"
+  plan_evidence: "engineering_runs/2026-07-11/0200-m0-3-trial-readiness-plan.md"
+  evidence_custodian_identity_or_role_ref: null
+
+scope_boundary:
+  trial_purpose: "Observe whether a consenting healthcare/public-health manager can independently navigate the synthetic meeting-to-decision-to-task-or-source-to-lesson chain in Obsidian."
+  allowed_fixture_root: "storage/personal_memory/example-person/vault"
+  synthetic_data_only_required: true
+  real_personal_staff_patient_or_confidential_data_allowed: false
+  fixture_mutation_allowed: false
+  rag_activation_allowed: false
+  organizational_memory_promotion_allowed: false
+  high_impact_action_allowed: false
+  runtime_execution_recorded_by_this_template: false
+  participant_performance_conclusions_allowed: false
+
+# Core gate states: MISSING, PENDING, COMPLETE, INVALID, EXPIRED, REVOKED, CONFLICTED.
+# NOT_APPLICABLE is prohibited for all eight core gates.
+gate_1_authorization:
+  state: "MISSING"
+  authorizer_identity_or_role_ref: null
+  authority_basis_ref: null
+  bounded_scope_ref: null
+  execution_window:
+    starts_at: null
+    ends_at: null
+  approval_timestamp: null
+  approval_evidence_ref: null
+  revoked: false
+  revocation_timestamp: null
+  revocation_evidence_ref: null
+
+gate_2_executor_delegation:
+  state: "MISSING"
+  executor_identity_or_role_ref: null
+  delegated_scope_ref: null
+  delegation_evidence_ref: null
+  accepted_at: null
+  acceptance_evidence_ref: null
+  conflict_declared: null
+  conflict_details_ref: null
+
+gate_3_participant_consent:
+  state: "MISSING"
+  participant_pseudonymous_ref: null
+  consent_form_version: null
+  affirmative_consent: false
+  consented_at: null
+  consent_evidence_ref: null
+  withdrawal_path_ref: null
+  withdrawn: false
+  withdrawn_at: null
+  withdrawal_evidence_ref: null
+  no_coaching_acknowledged: false
+
+gate_4_acceptance_authority:
+  state: "MISSING"
+  acceptance_authority_identity_or_role_ref: null
+  delegation_basis_ref: null
+  delegation_evidence_ref: null
+  independence_declared: false
+  conflict_declared: null
+  conflict_details_ref: null
+  compensating_control_required: null
+  compensating_control_approval_ref: null
+
+gate_5_runtime_environment:
+  state: "MISSING"
+  operating_system_and_version: null
+  obsidian_version: null
+  backlinks_core_plugin_enabled: null
+  graph_view_core_plugin_enabled: null
+  community_plugins: []
+  vault_location_class: null
+  network_state: null
+  observation_capture_method: null
+  environment_recorded_at: null
+  environment_evidence_ref: null
+
+gate_6_repository_and_fixture:
+  state: "MISSING"
+  immutable_repository_commit_sha: null
+  mutable_branch_or_tag_used_as_authority: false
+  fixture_root: "storage/personal_memory/example-person/vault"
+  expected_inventory_count: 5
+  expected_inventory:
+    - path: "meetings/m0-3-demo-meeting.md"
+      expected_hash: null
+    - path: "decisions/m0-3-demo-decision.md"
+      expected_hash: null
+    - path: "tasks/m0-3-demo-task.md"
+      expected_hash: null
+    - path: "sources/m0-3-demo-source-reference.md"
+      expected_hash: null
+    - path: "lessons/m0-3-demo-lesson.md"
+      expected_hash: null
+  observed_inventory_count: null
+  inventory_and_hashes_verified: false
+  verified_at: null
+  verification_evidence_ref: null
+  unreviewed_fixture_change_detected: null
+
+gate_7_synthetic_scope_acknowledgement:
+  state: "MISSING"
+  authorizer_acknowledged: false
+  authorizer_acknowledgement_ref: null
+  executor_acknowledged: false
+  executor_acknowledgement_ref: null
+  participant_acknowledged: false
+  participant_acknowledgement_ref: null
+  acknowledgements_aligned: false
+  prohibited_data_or_action_flag: false
+
+gate_8_audit_and_evidence_package:
+  state: "MISSING"
+  package_id: null
+  evidence_custodian_identity_or_role_ref: null
+  package_opened: false
+  opened_at: null
+  integrity_method: null
+  access_restrictions_ref: null
+  retention_authority_identity_or_role_ref: null
+  retention_authority_evidence_ref: null
+  retention_period_or_rule: null
+  retention_status: "PENDING_APPROVAL"
+  disposal_owner_identity_or_role_ref: null
+  disposal_trigger_or_rule: null
+  package_evidence_ref: null
+
+separation_of_duties:
+  authorizer_ref: null
+  executor_ref: null
+  participant_ref: null
+  acceptance_authority_ref: null
+  evidence_custodian_ref: null
+  role_overlaps_detected: []
+  unresolved_conflict: false
+  compensating_review_required: null
+  compensating_reviewer_identity_or_role_ref: null
+  compensating_review_complete: false
+  compensating_review_evidence_ref: null
+
+derived_readiness:
+  evaluator_name: null
+  evaluator_version: null
+  evaluated_at: null
+  gate_validity:
+    gate_1_authorization: false
+    gate_2_executor_delegation: false
+    gate_3_participant_consent: false
+    gate_4_acceptance_authority: false
+    gate_5_runtime_environment: false
+    gate_6_repository_and_fixture: false
+    gate_7_synthetic_scope_acknowledgement: false
+    gate_8_audit_and_evidence_package: false
+  invalid_or_pending_reasons:
+    - "Record is a draft template; no trial-specific evidence has been supplied."
+  trial_ready: false
+  derivation_rule_summary: >-
+    trial_ready may become true only when lifecycle state is APPROVED_NOT_ACTIVE
+    or ACTIVE_WITHIN_WINDOW; all eight core gates are COMPLETE with non-empty,
+    current, consistent and reviewable evidence; authorization and consent are
+    current and not revoked or withdrawn; repository SHA and fixture integrity
+    are verified; synthetic acknowledgements align; retention authority is
+    assigned; the evidence package is opened; no unresolved role conflict
+    exists; and no prohibited data or action flag is true.
+  default_fail_closed: true
+  explicit_non_claims:
+    trial_authorized_by_template: false
+    participant_consented_by_template: false
+    trial_executed: false
+    runtime_success_observed: false
+    manager_task_accepted: false
+    trusted_task_completion_rate_computable: false
+    trusted_task_completion_rate_improved: false
+    time_saved_observed: false
+    m0_3_done: false
+
+stop_conditions:
+  stop_if_any_core_gate_not_complete: true
+  stop_if_evidence_reference_missing: true
+  stop_if_authorization_expired_or_revoked: true
+  stop_if_consent_missing_or_withdrawn: true
+  stop_if_repository_sha_missing_or_mutable: true
+  stop_if_fixture_integrity_fails: true
+  stop_if_role_conflict_unresolved: true
+  stop_if_retention_authority_unassigned: true
+  stop_if_prohibited_data_or_action_detected: true

@@ -1,0 +1,31 @@
+name: M0.3 readiness template test
+
+on:
+  push:
+    paths:
+      - "docs/testing/M0_3_TRIAL_READINESS_RECORD_TEMPLATE.yml"
+      - "tests/test_m0_3_trial_readiness_template.py"
+      - ".github/workflows/m0-3-readiness-template-test.yml"
+  pull_request:
+    paths:
+      - "docs/testing/M0_3_TRIAL_READINESS_RECORD_TEMPLATE.yml"
+      - "tests/test_m0_3_trial_readiness_template.py"
+      - ".github/workflows/m0-3-readiness-template-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install bounded test dependencies
+        run: python -m pip install --disable-pip-version-check pytest==8.4.1 PyYAML==6.0.2
+      - name: Parse YAML and validate fail-closed invariants
+        run: python -m pytest -q tests/test_m0_3_trial_readiness_template.py

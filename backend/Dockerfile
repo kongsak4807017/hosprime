@@ -2,25 +2,24 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# ติดตั้ง System dependencies สำหรับ psycopg2 และคอมไพล์ฟังก์ชัน C
+# Install system dependencies required by psycopg2 and native extensions.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# คัดลอกและติดตั้ง requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies before copying application code for better layer reuse.
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# คัดลอกไฟล์โปรเจกต์ทั้งหมด
-COPY . .
-
-# ตั้งค่า PYTHONPATH
+# Preserve the repository package namespace expected by imports such as
+# `backend.app.*` in both bootstrap and application modules.
+COPY . /app/backend
 ENV PYTHONPATH=/app
 
-# เปิด Port 8000
 EXPOSE 8000
 
-# รัน bootstrap ก่อนเพื่อสร้างข้อมูลตั้งต้น จากนั้นค่อยรัน uvicorn server
-CMD python app/db/bootstrap.py && uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Create missing schema and the configured bootstrap administrator without
+# deleting existing data, then start the FastAPI application.
+CMD ["/bin/sh", "-c", "python -m backend.app.db.safe_bootstrap && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"]

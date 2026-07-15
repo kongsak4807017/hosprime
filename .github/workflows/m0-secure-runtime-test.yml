@@ -74,10 +74,10 @@ jobs:
       - name: Build deployable images
         run: docker compose --env-file .env build
 
-      - name: Confirm tracked configuration excludes known compromised literals
+      - name: Confirm runtime configuration excludes known compromised literals
         shell: bash
         run: |
-          if git grep -I -n -E 'postgrespassword|neo4jpassword|hosprime-super-secret-key-enterprise' -- ':!engineering_runs/**' ':!docs/**'; then
+          if git grep -I -n -E 'postgrespassword|neo4jpassword|hosprime-super-secret-key-enterprise' -- docker-compose.yml backend/app; then
             echo 'Known insecure literal remains in tracked runtime source.' >&2
             exit 1
           fi

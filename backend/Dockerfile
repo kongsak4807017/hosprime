@@ -20,6 +20,6 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
-# Initialize the database, then start the FastAPI application using module paths
-# that match the package layout inside the image.
-CMD ["/bin/sh", "-c", "python -m backend.app.db.bootstrap && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"]
+# Create missing schema and the configured bootstrap administrator without
+# deleting existing data, then start the FastAPI application.
+CMD ["/bin/sh", "-c", "python -m backend.app.db.safe_bootstrap && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"]

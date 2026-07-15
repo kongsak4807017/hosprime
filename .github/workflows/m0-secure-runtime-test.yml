@@ -7,7 +7,9 @@ on:
     paths:
       - ".env.example"
       - "docker-compose.yml"
+      - "backend/Dockerfile"
       - "backend/app/core/config.py"
+      - "backend/app/db/safe_bootstrap.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
       - ".github/workflows/m0-secure-runtime-test.yml"
@@ -15,7 +17,9 @@ on:
     paths:
       - ".env.example"
       - "docker-compose.yml"
+      - "backend/Dockerfile"
       - "backend/app/core/config.py"
+      - "backend/app/db/safe_bootstrap.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
       - ".github/workflows/m0-secure-runtime-test.yml"
@@ -63,6 +67,9 @@ jobs:
           NEO4J_BOLT_PORT=17687
           GEMINI_API_KEY=ci-provider-key-not-for-production
           JWT_SECRET=ci-only-jwt-secret-with-more-than-thirty-two-characters
+          BOOTSTRAP_ADMIN_USERNAME=ci-admin
+          BOOTSTRAP_ADMIN_PASSWORD=ci-admin-password-not-for-production
+          SEED_DEMO_DATA=false
           CORS_ORIGINS=["http://localhost:18080"]
           BACKEND_PORT=18000
           FRONTEND_PORT=18080
@@ -95,6 +102,34 @@ jobs:
           assert ready.get("status") in {"ready", "degraded"}, ready
           assert ready.get("database_dialect") == "postgresql", ready
           PY
+
+      - name: Verify idempotent bootstrap preserves data and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE IF NOT EXISTS bootstrap_restart_probe (
+            id integer PRIMARY KEY,
+            value text NOT NULL
+          );
+          INSERT INTO bootstrap_restart_probe (id, value)
+          VALUES (1, 'preserve-me')
+          ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
+          SQL
+
+          before_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          test -n "$before_hash"
+
+          docker compose --env-file .env restart backend
+          timeout 180 bash -c 'until curl --fail --silent http://127.0.0.1:18000/health/ready >/dev/null; do sleep 3; done'
+
+          preserved="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT value FROM bootstrap_restart_probe WHERE id=1;")"
+          after_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          admin_count="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT count(*) FROM users WHERE username='ci-admin';")"
+
+          test "$preserved" = "preserve-me"
+          test "$before_hash" = "$after_hash"
+          test "$admin_count" = "1"
 
       - name: Verify frontend HTTP availability
         run: |

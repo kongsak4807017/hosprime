@@ -60,12 +60,24 @@ def test_bootstrap_admin_password_is_required_and_strong() -> None:
     ).fatal_configuration_issues()
 
 
-def test_production_rejects_sqlite() -> None:
+def test_production_rejects_effective_sqlite_database() -> None:
     warnings = make_settings(
         ENVIRONMENT="production",
         DATABASE_URL="sqlite:///./hosprime.db",
+        POSTGRES_URL="",
     ).security_warnings()
     assert "SQLite is not permitted in production" in warnings
+
+
+def test_production_accepts_postgres_url_over_sqlite_fallback() -> None:
+    settings = make_settings(
+        ENVIRONMENT="production",
+        DATABASE_URL="sqlite:///./hosprime.db",
+        POSTGRES_URL="postgresql://hosprime:safe-local-test-password@postgres:5432/hosprime",
+    )
+
+    assert settings.effective_database_url.startswith("postgresql://")
+    assert "SQLite is not permitted in production" not in settings.security_warnings()
 
 
 def test_compose_uses_required_environment_substitution() -> None:

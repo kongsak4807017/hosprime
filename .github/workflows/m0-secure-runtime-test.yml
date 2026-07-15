@@ -108,8 +108,21 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          docker compose --env-file .env ps --all || true
-          docker compose --env-file .env logs --no-color --timestamps --tail=200 || true
+          mkdir -p /tmp/hosprime-compose-diagnostics
+          docker compose --env-file .env ps --all > /tmp/hosprime-compose-diagnostics/compose-ps.txt 2>&1 || true
+          docker compose --env-file .env logs --no-color --timestamps --tail=300 > /tmp/hosprime-compose-diagnostics/compose-logs.txt 2>&1 || true
+          docker inspect hosprime_postgres hosprime_redis hosprime_neo4j hosprime_backend hosprime_frontend > /tmp/hosprime-compose-diagnostics/docker-inspect.json 2>&1 || true
+          cat /tmp/hosprime-compose-diagnostics/compose-ps.txt
+          tail -n 120 /tmp/hosprime-compose-diagnostics/compose-logs.txt || true
+
+      - name: Upload Compose diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosprime-compose-diagnostics
+          path: /tmp/hosprime-compose-diagnostics
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Stop complete Compose stack
         if: always()

@@ -14,8 +14,11 @@ def make_settings(**overrides: object) -> Settings:
         "NEO4J_PASSWORD": "local-test-password-not-a-default",
         "DATABASE_URL": "postgresql://hosprime:safe-local-test-password@postgres:5432/hosprime",
         "POSTGRES_URL": "postgresql://hosprime:safe-local-test-password@postgres:5432/hosprime",
+        "BOOTSTRAP_ADMIN_USERNAME": "admin",
+        "BOOTSTRAP_ADMIN_PASSWORD": "safe-local-admin-password",
         "ALLOW_DEMO_FALLBACKS": False,
         "ALLOW_PSEUDO_EMBEDDINGS": False,
+        "SEED_DEMO_DATA": False,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -31,6 +34,7 @@ def test_placeholder_credentials_fail_closed() -> None:
         GEMINI_API_KEY="CHANGE_ME_WITH_A_NEW_PROVIDER_KEY",
         NEO4J_PASSWORD="CHANGE_ME_USE_A_LONG_RANDOM_NEO4J_PASSWORD",
         DATABASE_URL="postgresql://hosprime:CHANGE_ME@postgres:5432/hosprime",
+        BOOTSTRAP_ADMIN_PASSWORD="CHANGE_ME_WITH_A_LONG_RANDOM_ADMIN_PASSWORD",
     )
 
     issues = settings.fatal_configuration_issues()
@@ -39,11 +43,21 @@ def test_placeholder_credentials_fail_closed() -> None:
     assert any("GEMINI_API_KEY" in issue for issue in issues)
     assert any("NEO4J_PASSWORD" in issue for issue in issues)
     assert any("DATABASE_URL" in issue for issue in issues)
+    assert any("BOOTSTRAP_ADMIN_PASSWORD" in issue for issue in issues)
 
 
 def test_short_jwt_secret_is_rejected() -> None:
     issues = make_settings(JWT_SECRET="too-short").fatal_configuration_issues()
     assert "JWT_SECRET must contain at least 32 characters" in issues
+
+
+def test_bootstrap_admin_password_is_required_and_strong() -> None:
+    assert "BOOTSTRAP_ADMIN_PASSWORD is not configured" in make_settings(
+        BOOTSTRAP_ADMIN_PASSWORD=""
+    ).fatal_configuration_issues()
+    assert "BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters" in make_settings(
+        BOOTSTRAP_ADMIN_PASSWORD="short"
+    ).fatal_configuration_issues()
 
 
 def test_production_rejects_sqlite() -> None:
@@ -64,6 +78,8 @@ def test_compose_uses_required_environment_substitution() -> None:
         "NEO4J_PASSWORD",
         "GEMINI_API_KEY",
         "JWT_SECRET",
+        "BOOTSTRAP_ADMIN_USERNAME",
+        "BOOTSTRAP_ADMIN_PASSWORD",
     )
     for variable in required_variables:
         assert f"${{{variable}:?" in compose
@@ -72,10 +88,26 @@ def test_compose_uses_required_environment_substitution() -> None:
         "postgrespassword",
         "neo4jpassword",
         "hosprime-super-secret-key-enterprise",
+        "admin1234",
+        "user1234",
     )
     lowered = compose.lower()
     for literal in forbidden_literals:
         assert literal not in lowered
+
+
+def test_deploy_bootstrap_is_idempotent_and_non_destructive() -> None:
+    dockerfile = (REPOSITORY_ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    bootstrap = (
+        REPOSITORY_ROOT / "backend" / "app" / "db" / "safe_bootstrap.py"
+    ).read_text(encoding="utf-8")
+
+    assert "backend.app.db.safe_bootstrap" in dockerfile
+    assert "drop_all" not in bootstrap
+    assert "create_all" in bootstrap
+    assert "BOOTSTRAP_ADMIN_PASSWORD" in bootstrap
+    assert "admin1234" not in bootstrap
+    assert "user1234" not in bootstrap
 
 
 def test_real_env_files_remain_ignored() -> None:

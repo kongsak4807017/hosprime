@@ -8,6 +8,7 @@ root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from backend.app.db.session import engine, SessionLocal
 from backend.app.db.models import Base, Document, User as DBUser, EntityRelation
@@ -18,8 +19,26 @@ from backend.app.auth import get_password_hash
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def ensure_database_extensions() -> None:
+    """Create database extensions required by SQLAlchemy column types.
+
+    The pgvector image ships the extension binaries but PostgreSQL still
+    requires CREATE EXTENSION for each database before tables using VECTOR
+    columns can be created. SQLite-based tests do not require this step.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+
+    logger.info("Ensuring required PostgreSQL extensions are enabled...")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    logger.info("PostgreSQL extension 'vector' is ready.")
+
+
 def bootstrap_data():
     logger.info("Initializing database schema...")
+    ensure_database_extensions()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema initialized successfully.")

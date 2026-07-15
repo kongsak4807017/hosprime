@@ -3,7 +3,7 @@ name: M0 secure runtime configuration
 on:
   push:
     branches:
-      - security/m0-secure-runtime-config
+      - main
     paths:
       - ".env.example"
       - "docker-compose.yml"

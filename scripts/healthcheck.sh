@@ -47,8 +47,8 @@ live = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 ready = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
 if live.get("status") != "live":
     raise SystemExit(f"Unexpected liveness response: {live}")
-if ready.get("status") not in {"ready", "degraded"}:
-    raise SystemExit(f"Unexpected readiness response: {ready}")
+if ready.get("status") != "ready":
+    raise SystemExit(f"Backend is not fully ready: {ready}")
 if ready.get("database_dialect") != "postgresql":
     raise SystemExit(f"Expected PostgreSQL runtime: {ready}")
 PY

@@ -55,6 +55,12 @@ app.include_router(api_router, prefix="/api")
 
 @app.on_event("startup")
 def startup_checks() -> None:
+    fatal_issues = settings.fatal_configuration_issues()
+    if fatal_issues:
+        raise RuntimeError(
+            "Unsafe runtime configuration: " + "; ".join(fatal_issues)
+        )
+
     warnings = settings.security_warnings()
     if warnings:
         message = "; ".join(warnings)
@@ -86,15 +92,17 @@ def health_live():
 
 @app.get("/health/ready")
 def health_ready():
-    warnings = settings.security_warnings()
-    if settings.is_production and warnings:
+    issues = settings.security_warnings()
+    if settings.fatal_configuration_issues() or (
+        settings.is_production and issues
+    ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "not_ready", "configuration_issues": warnings},
+            detail={"status": "not_ready", "configuration_issues": issues},
         )
     return {
-        "status": "ready" if not warnings else "degraded",
-        "configuration_warnings": warnings,
+        "status": "ready" if not issues else "degraded",
+        "configuration_warnings": issues,
         "database_dialect": engine.dialect.name,
     }
 

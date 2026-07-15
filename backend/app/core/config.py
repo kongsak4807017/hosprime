@@ -18,6 +18,8 @@ _KNOWN_UNSAFE_SECRETS = {
     "postgrespassword",
     "neo4jpassword",
     "hosprime-super-secret-key-enterprise",
+    "admin1234",
+    "user1234",
 }
 
 
@@ -37,6 +39,7 @@ class Settings(BaseSettings):
     # content must never be treated as organizational evidence.
     ALLOW_DEMO_FALLBACKS: bool = False
     ALLOW_PSEUDO_EMBEDDINGS: bool = False
+    SEED_DEMO_DATA: bool = False
 
     # Data stores
     DATABASE_URL: str = "sqlite:///./hosprime.db"
@@ -50,6 +53,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    BOOTSTRAP_ADMIN_USERNAME: str = "admin"
+    BOOTSTRAP_ADMIN_PASSWORD: str = ""
 
     # Storage and upload controls
     STORAGE_DIR: str = "../storage"
@@ -101,6 +106,7 @@ class Settings(BaseSettings):
             "JWT_SECRET": self.JWT_SECRET,
             "GEMINI_API_KEY": self.GEMINI_API_KEY,
             "NEO4J_PASSWORD": self.NEO4J_PASSWORD,
+            "BOOTSTRAP_ADMIN_PASSWORD": self.BOOTSTRAP_ADMIN_PASSWORD,
         }
         for name, value in secret_values.items():
             if value and (
@@ -110,6 +116,12 @@ class Settings(BaseSettings):
 
         if self.JWT_SECRET and len(self.JWT_SECRET) < 32:
             issues.append("JWT_SECRET must contain at least 32 characters")
+        if not self.BOOTSTRAP_ADMIN_PASSWORD:
+            issues.append("BOOTSTRAP_ADMIN_PASSWORD is not configured")
+        elif len(self.BOOTSTRAP_ADMIN_PASSWORD) < 12:
+            issues.append("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters")
+        if not self.BOOTSTRAP_ADMIN_USERNAME.strip():
+            issues.append("BOOTSTRAP_ADMIN_USERNAME is not configured")
 
         for name, value in {
             "DATABASE_URL": self.DATABASE_URL,
@@ -131,6 +143,8 @@ class Settings(BaseSettings):
             warnings.append("ALLOW_DEMO_FALLBACKS is enabled")
         if self.ALLOW_PSEUDO_EMBEDDINGS:
             warnings.append("ALLOW_PSEUDO_EMBEDDINGS is enabled")
+        if self.SEED_DEMO_DATA:
+            warnings.append("SEED_DEMO_DATA is enabled")
         if self.is_production and self.DATABASE_URL.startswith("sqlite:"):
             warnings.append("SQLite is not permitted in production")
         return list(dict.fromkeys(warnings))

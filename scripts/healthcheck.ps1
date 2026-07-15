@@ -42,7 +42,7 @@ try {
     $frontend = Invoke-WebRequest -Uri "$FrontendUrl/" -TimeoutSec 15 -UseBasicParsing
 
     if ($live.status -ne 'live') { Fail "Unexpected liveness status: $($live.status)" }
-    if (@('ready', 'degraded') -notcontains $ready.status) { Fail "Unexpected readiness status: $($ready.status)" }
+    if ($ready.status -ne 'ready') { Fail "Backend is not fully ready: $($ready.status)" }
     if ($ready.database_dialect -ne 'postgresql') { Fail "Expected PostgreSQL runtime; got $($ready.database_dialect)" }
     if ([string]::IsNullOrWhiteSpace($frontend.Content)) { Fail 'Frontend returned an empty response.' }
 

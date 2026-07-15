@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() in {"production", "prod"}
 
+    @property
+    def effective_database_url(self) -> str:
+        """Return the database URL used by the SQLAlchemy session layer."""
+        return self.POSTGRES_URL or self.DATABASE_URL
+
     @staticmethod
     def _is_placeholder(value: str) -> bool:
         normalized = value.strip().lower()
@@ -145,7 +150,7 @@ class Settings(BaseSettings):
             warnings.append("ALLOW_PSEUDO_EMBEDDINGS is enabled")
         if self.SEED_DEMO_DATA:
             warnings.append("SEED_DEMO_DATA is enabled")
-        if self.is_production and self.DATABASE_URL.startswith("sqlite:"):
+        if self.is_production and self.effective_database_url.startswith("sqlite:"):
             warnings.append("SQLite is not permitted in production")
         return list(dict.fromkeys(warnings))
 

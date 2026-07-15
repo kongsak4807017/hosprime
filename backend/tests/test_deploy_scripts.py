@@ -40,6 +40,15 @@ def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
         assert "FRONTEND_PORT" in content
 
 
+def test_healthchecks_require_full_readiness_not_degraded_state() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+    assert 'ready.get("status") != "ready"' in shell
+    assert "$ready.status -ne 'ready'" in powershell
+    assert '"degraded"' not in shell
+    assert "'degraded'" not in powershell
+
+
 def test_scripts_do_not_echo_or_generate_credentials() -> None:
     forbidden = (
         "POSTGRES_PASSWORD=",

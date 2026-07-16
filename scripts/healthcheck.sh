@@ -53,10 +53,6 @@ for service in postgres redis neo4j backend frontend; do
   [[ -n "$cid" ]] || fail "Service container does not exist: $service"
   state="$(container_state "$cid")"
   [[ "$state" == "running" ]] || fail "Service is not running: $service ($state)"
-done
-
-for service in postgres redis neo4j backend; do
-  cid="$(container_id "$service")"
   health="$(container_health "$cid")"
   [[ "$health" == "healthy" ]] || fail "Service is not healthy: $service ($health)"
 done

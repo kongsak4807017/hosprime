@@ -41,9 +41,16 @@ HIGH_CONFIDENCE_RULES: tuple[Rule, ...] = (
     Rule("slack-token", re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{20,}\b")),
 )
 
+CREDENTIAL_KEY_TERM = (
+    r"(?:password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key)"
+)
 ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(?:password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key)\b"
-    r"\s*(?::|=)\s*[\"']?([^\s\"'#,;}{\]]{8,})"
+    rf"(?ix)"
+    rf"[\"']?[a-z0-9_.-]*{CREDENTIAL_KEY_TERM}[a-z0-9_.-]*[\"']?"
+    rf"\s*(?::|=)\s*"
+    rf"(?:\"(?P<double>[^\"\r\n]{{8,}})\""
+    rf"|'(?P<single>[^'\r\n]{{8,}})'"
+    rf"|(?P<bare>[^\s\"'#,;}}{{\]\r\n]{{8,}}))"
 )
 
 SAFE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -109,6 +116,16 @@ def assignment_is_safe(value: str) -> bool:
     return any(pattern.fullmatch(compact) for pattern in SAFE_VALUE_PATTERNS)
 
 
+def assignment_value(match: re.Match[str]) -> str:
+    """Return the value from a quoted or unquoted credential assignment."""
+
+    for group_name in ("double", "single", "bare"):
+        candidate = match.group(group_name)
+        if candidate is not None:
+            return candidate
+    raise ValueError("credential assignment did not contain a value")
+
+
 def scan_line(path: str, number: int, line: str) -> list[Finding]:
     findings: list[Finding] = []
     for rule in HIGH_CONFIDENCE_RULES:
@@ -116,7 +133,7 @@ def scan_line(path: str, number: int, line: str) -> list[Finding]:
             findings.append(Finding(path, number, rule.name, redact(match.group(0))))
 
     for match in ASSIGNMENT_RE.finditer(line):
-        candidate = match.group(1)
+        candidate = assignment_value(match)
         if not assignment_is_safe(candidate):
             findings.append(
                 Finding(path, number, "credential-assignment", redact(candidate))

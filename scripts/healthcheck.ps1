@@ -51,10 +51,6 @@ try {
         $containerId = Get-ServiceContainerId $service
         $state = Get-ContainerState $containerId
         if ($state -ne 'running') { Fail "Service is not running: $service ($state)" }
-    }
-
-    foreach ($service in @('postgres', 'redis', 'neo4j', 'backend')) {
-        $containerId = Get-ServiceContainerId $service
         $health = Get-ContainerHealth $containerId
         if ($health -ne 'healthy') { Fail "Service is not healthy: $service ($health)" }
     }

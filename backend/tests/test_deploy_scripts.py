@@ -33,6 +33,12 @@ def test_bootstrap_scripts_fail_closed_on_placeholders_and_wait_for_health() -> 
     assert "(^|=)CHANGE_ME" not in powershell
 
 
+def test_shell_bootstrap_invokes_healthcheck_through_bash() -> None:
+    shell = read("scripts/bootstrap.sh")
+    assert 'bash "$ROOT_DIR/scripts/healthcheck.sh"' in shell
+    assert '"$ROOT_DIR/scripts/healthcheck.sh"\n' not in shell
+
+
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
     required = ("postgres", "redis", "neo4j", "backend", "frontend")
     for path in ("scripts/healthcheck.sh", "scripts/healthcheck.ps1"):

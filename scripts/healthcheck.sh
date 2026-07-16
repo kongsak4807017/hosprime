@@ -11,6 +11,15 @@ read_env() {
   value="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)"
   printf '%s' "${value:-$default_value}"
 }
+container_id() {
+  docker compose --env-file "$ENV_FILE" ps -q "$1"
+}
+container_state() {
+  docker inspect --format '{{.State.Status}}' "$1"
+}
+container_health() {
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1"
+}
 
 require docker
 require curl
@@ -28,9 +37,17 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 cd "$ROOT_DIR"
 docker compose --env-file "$ENV_FILE" config --quiet
 
-docker compose --env-file "$ENV_FILE" ps --status running --services > "$TMP_DIR/running-services.txt"
 for service in postgres redis neo4j backend frontend; do
-  grep -Fxq "$service" "$TMP_DIR/running-services.txt" || fail "Service is not running: $service"
+  cid="$(container_id "$service")"
+  [[ -n "$cid" ]] || fail "Service container does not exist: $service"
+  state="$(container_state "$cid")"
+  [[ "$state" == "running" ]] || fail "Service is not running: $service ($state)"
+done
+
+for service in postgres redis neo4j backend; do
+  cid="$(container_id "$service")"
+  health="$(container_health "$cid")"
+  [[ "$health" == "healthy" ]] || fail "Service is not healthy: $service ($health)"
 done
 
 curl --fail --silent --show-error "$BACKEND_URL/health/live" > "$TMP_DIR/live.json"

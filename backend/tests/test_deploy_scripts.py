@@ -27,6 +27,11 @@ def test_bootstrap_scripts_fail_closed_on_placeholders_and_wait_for_health() -> 
         assert "healthcheck" in content
         assert "down --volumes" not in content
 
+    assert "!/^[[:space:]]*(#|$)/ && /CHANGE_ME/" in shell
+    assert "$_ -notmatch '^\\s*(#|$)' -and $_ -match 'CHANGE_ME'" in powershell
+    assert "(^|=)CHANGE_ME" not in shell
+    assert "(^|=)CHANGE_ME" not in powershell
+
 
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
     required = ("postgres", "redis", "neo4j", "backend", "frontend")
@@ -38,6 +43,19 @@ def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
         assert "/health/ready" in content
         assert "database_dialect" in content
         assert "FRONTEND_PORT" in content
+
+
+def test_healthchecks_require_container_health_not_only_running_state() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    for content in (shell, powershell):
+        assert "docker inspect" in content
+        assert "State.Health.Status" in content
+        assert "healthy" in content
+
+    assert "ps --status running --services" not in shell
+    assert "ps --status running --services" not in powershell
 
 
 def test_healthchecks_require_full_readiness_not_degraded_state() -> None:

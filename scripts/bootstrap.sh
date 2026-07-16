@@ -47,6 +47,6 @@ if [[ "$SKIP_BUILD" == false ]]; then
   docker compose --env-file "$ENV_FILE" build
 fi
 docker compose --env-file "$ENV_FILE" up --detach --wait --wait-timeout 240
-HOSPRIME_ENV_FILE="$ENV_FILE" "$ROOT_DIR/scripts/healthcheck.sh"
+HOSPRIME_ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/healthcheck.sh"
 
 printf 'HosPrime local stack is ready.\n'

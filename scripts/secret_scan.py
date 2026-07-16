@@ -46,22 +46,13 @@ ASSIGNMENT_RE = re.compile(
     r"\s*(?::|=)\s*[\"']?([^\s\"'#,;}{\]]{8,})"
 )
 
-SAFE_VALUE_MARKERS = (
-    "change_me",
-    "changeme",
-    "example",
-    "sample",
-    "dummy",
-    "fake",
-    "placeholder",
-    "not-for-production",
-    "not_for_production",
-    "ci-",
-    "test-",
-    "${",
-    "$env:",
-    "getenv",
-    "secret_key",
+SAFE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)^(?:change[_-]?me|changeme)(?:[_-][a-z0-9_-]+)?$"),
+    re.compile(r"(?i)^(?:example|sample|dummy|fake|placeholder)(?:[_-][a-z0-9_-]+)?$"),
+    re.compile(r"(?i)^(?:ci|test)[_-][a-z0-9_-]*(?:not[_-]for[_-]production)?$"),
+    re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?\}$"),
+    re.compile(r"(?i)^\$env:[A-Za-z_][A-Za-z0-9_]*$"),
+    re.compile(r"(?i)^getenv\([^)]{1,200}\)$"),
 )
 
 TEXT_SUFFIXES = {
@@ -108,8 +99,14 @@ def redact(value: str) -> str:
 
 
 def assignment_is_safe(value: str) -> bool:
-    lowered = value.lower()
-    return any(marker in lowered for marker in SAFE_VALUE_MARKERS)
+    """Allow only explicit, whole-value placeholders or environment references.
+
+    Substring matching is intentionally prohibited: a real credential containing
+    words such as ``example`` or ``test`` must still be reported.
+    """
+
+    compact = value.strip()
+    return any(pattern.fullmatch(compact) for pattern in SAFE_VALUE_PATTERNS)
 
 
 def scan_line(path: str, number: int, line: str) -> list[Finding]:

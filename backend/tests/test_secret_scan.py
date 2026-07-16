@@ -47,6 +47,28 @@ class SecretScanTests(unittest.TestCase):
         )
         self.assertEqual(secret_scan.scan_text(".env.example", text), [])
 
+    def test_safe_marker_substrings_do_not_hide_real_credentials(self) -> None:
+        text = "\n".join(
+            (
+                "PASSWORD=production-example-credential-123",
+                "TOKEN=real-test-token-material-456",
+                "API_KEY=prefix-secret_key-production-789",
+            )
+        )
+        findings = secret_scan.scan_text("settings.env", text)
+        self.assertEqual(
+            sum(item.rule == "credential-assignment" for item in findings), 3
+        )
+
+    def test_environment_references_must_match_the_whole_value(self) -> None:
+        self.assertEqual(
+            secret_scan.scan_text(".env.example", "JWT_SECRET=${JWT_SECRET}"), []
+        )
+        findings = secret_scan.scan_text(
+            "settings.env", "JWT_SECRET=prefix-${JWT_SECRET}-suffix"
+        )
+        self.assertTrue(any(item.rule == "credential-assignment" for item in findings))
+
     def test_deduplicate_returns_deterministic_unique_findings(self) -> None:
         finding = secret_scan.Finding(
             "a.env", 3, "credential-assignment", "abc…xyz"

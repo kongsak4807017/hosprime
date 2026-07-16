@@ -15,6 +15,22 @@ function Read-EnvValue([string]$Key, [string]$DefaultValue) {
     if ([string]::IsNullOrWhiteSpace($value)) { return $DefaultValue }
     return $value
 }
+function Get-ServiceContainerId([string]$Service) {
+    $id = [string]::Join('', @(& docker compose --env-file $EnvFile ps -q $Service)).Trim()
+    if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect service: $Service" }
+    if ([string]::IsNullOrWhiteSpace($id)) { Fail "Service container does not exist: $Service" }
+    return $id
+}
+function Get-ContainerState([string]$ContainerId) {
+    $state = [string]::Join('', @(& docker inspect --format '{{.State.Status}}' $ContainerId)).Trim()
+    if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect container state: $ContainerId" }
+    return $state
+}
+function Get-ContainerHealth([string]$ContainerId) {
+    $health = [string]::Join('', @(& docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $ContainerId)).Trim()
+    if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect container health: $ContainerId" }
+    return $health
+}
 
 if (-not (Test-Path -LiteralPath $EnvFile)) { Fail "Environment file not found: $EnvFile" }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
@@ -31,10 +47,16 @@ try {
     & docker compose --env-file $EnvFile config --quiet
     if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 
-    $running = @(& docker compose --env-file $EnvFile ps --status running --services)
-    if ($LASTEXITCODE -ne 0) { Fail 'Unable to inspect Compose services.' }
     foreach ($service in @('postgres', 'redis', 'neo4j', 'backend', 'frontend')) {
-        if ($running -notcontains $service) { Fail "Service is not running: $service" }
+        $containerId = Get-ServiceContainerId $service
+        $state = Get-ContainerState $containerId
+        if ($state -ne 'running') { Fail "Service is not running: $service ($state)" }
+    }
+
+    foreach ($service in @('postgres', 'redis', 'neo4j', 'backend')) {
+        $containerId = Get-ServiceContainerId $service
+        $health = Get-ContainerHealth $containerId
+        if ($health -ne 'healthy') { Fail "Service is not healthy: $service ($health)" }
     }
 
     $live = Invoke-RestMethod -Uri "$BackendUrl/health/live" -TimeoutSec 15

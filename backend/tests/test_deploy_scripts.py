@@ -67,6 +67,14 @@ def test_healthchecks_require_full_readiness_not_degraded_state() -> None:
     assert "'degraded'" not in powershell
 
 
+def test_shell_http_probes_have_bounded_timeouts() -> None:
+    shell = read("scripts/healthcheck.sh")
+    assert "--connect-timeout" in shell
+    assert "--max-time" in shell
+    assert "HOSPRIME_HTTP_CONNECT_TIMEOUT_SECONDS" in shell
+    assert "HOSPRIME_HTTP_MAX_TIME_SECONDS" in shell
+
+
 def test_scripts_do_not_echo_or_generate_credentials() -> None:
     forbidden = (
         "POSTGRES_PASSWORD=",

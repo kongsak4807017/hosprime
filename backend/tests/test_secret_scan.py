@@ -36,6 +36,31 @@ class SecretScanTests(unittest.TestCase):
         findings = secret_scan.scan_text("settings.yml", f"{name}: {value}")
         self.assertTrue(any(item.rule == "credential-assignment" for item in findings))
 
+    def test_prefixed_environment_variable_names_are_detected(self) -> None:
+        text = "\n".join(
+            (
+                "POSTGRES_PASSWORD=production-database-password",
+                "BOOTSTRAP_ADMIN_PASSWORD=production-admin-password",
+                "SERVICE_API_KEY=production-provider-key",
+            )
+        )
+        findings = secret_scan.scan_text("settings.env", text)
+        self.assertEqual(
+            sum(item.rule == "credential-assignment" for item in findings), 3
+        )
+
+    def test_quoted_json_and_yaml_assignments_are_detected(self) -> None:
+        text = "\n".join(
+            (
+                '"database_password": "quoted value with spaces"',
+                "'service_token': 'another quoted credential value'",
+            )
+        )
+        findings = secret_scan.scan_text("settings.json", text)
+        self.assertEqual(
+            sum(item.rule == "credential-assignment" for item in findings), 2
+        )
+
     def test_safe_placeholders_and_ci_values_are_allowed(self) -> None:
         text = "\n".join(
             (

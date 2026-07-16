@@ -2,8 +2,8 @@
 """Fail closed when tracked files or a Git diff contain likely credentials.
 
 The scanner is dependency-free so it can run locally and in CI before application
-packages are installed. Findings are always redacted. Historical credentials that
-may already exist still require explicit owner-led revocation or rotation; this
+packages are installed. Findings are always fully redacted. Historical credentials
+that may already exist still require explicit owner-led revocation or rotation; this
 scanner prevents new exposure and supports a manual full-tree audit.
 """
 
@@ -48,15 +48,21 @@ ASSIGNMENT_RE = re.compile(
     rf"(?ix)"
     rf"[\"']?[a-z0-9_.-]*{CREDENTIAL_KEY_TERM}[a-z0-9_.-]*[\"']?"
     rf"\s*(?::|=)\s*"
-    rf"(?:\"(?P<double>[^\"\r\n]{{8,}})\""
-    rf"|'(?P<single>[^'\r\n]{{8,}})'"
-    rf"|(?P<bare>[^\s\"'#,;}}{{\]\r\n]{{8,}}))"
+    r"(?:(?P<env>\$\{[^}\r\n]+\})"
+    rf"|\"(?P<double>[^\"\r\n]+)\""
+    rf"|'(?P<single>[^'\r\n]+)'"
+    rf"|(?P<bare>[^\s\"'#,;}}{{\]\r\n]+))"
+)
+URI_USERINFO_RE = re.compile(
+    r"(?i)\b[a-z][a-z0-9+.-]{1,31}://"
+    r"(?P<username>[^/\s:@]+):(?P<password>[^@\s/]+)@(?P<host>[^/\s]+)"
 )
 
 SAFE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)^(?:change[_-]?me|changeme)(?:[_-][a-z0-9_-]+)?$"),
     re.compile(r"(?i)^(?:example|sample|dummy|fake|placeholder)(?:[_-][a-z0-9_-]+)?$"),
     re.compile(r"(?i)^(?:ci|test)[_-][a-z0-9_-]*(?:not[_-]for[_-]production)?$"),
+    re.compile(r"(?i)^(?:null|none|nil|~)$"),
     re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?\}$"),
     re.compile(r"(?i)^\$env:[A-Za-z_][A-Za-z0-9_]*$"),
     re.compile(r"(?i)^getenv\([^)]{1,200}\)$"),
@@ -98,11 +104,10 @@ def run_git(*args: str) -> bytes:
     return completed.stdout
 
 
-def redact(value: str) -> str:
-    compact = value.strip()
-    if len(compact) <= 8:
-        return "<redacted>"
-    return f"{compact[:3]}…{compact[-3:]}"
+def redact(_value: str) -> str:
+    """Return a constant marker without disclosing any original character."""
+
+    return "<redacted>"
 
 
 def assignment_is_safe(value: str) -> bool:
@@ -117,9 +122,9 @@ def assignment_is_safe(value: str) -> bool:
 
 
 def assignment_value(match: re.Match[str]) -> str:
-    """Return the value from a quoted or unquoted credential assignment."""
+    """Return the value from an environment, quoted or unquoted assignment."""
 
-    for group_name in ("double", "single", "bare"):
+    for group_name in ("env", "double", "single", "bare"):
         candidate = match.group(group_name)
         if candidate is not None:
             return candidate
@@ -131,6 +136,13 @@ def scan_line(path: str, number: int, line: str) -> list[Finding]:
     for rule in HIGH_CONFIDENCE_RULES:
         for match in rule.pattern.finditer(line):
             findings.append(Finding(path, number, rule.name, redact(match.group(0))))
+
+    for match in URI_USERINFO_RE.finditer(line):
+        userinfo_value = match.group("password")
+        if not assignment_is_safe(userinfo_value):
+            findings.append(
+                Finding(path, number, "credential-uri-userinfo", redact(userinfo_value))
+            )
 
     for match in ASSIGNMENT_RE.finditer(line):
         candidate = assignment_value(match)

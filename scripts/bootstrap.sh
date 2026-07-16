@@ -38,7 +38,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 2
 fi
 
-if grep -Eq '(^|=)CHANGE_ME' "$ENV_FILE"; then
+if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then
   fail "$ENV_FILE still contains CHANGE_ME placeholders"
 fi
 

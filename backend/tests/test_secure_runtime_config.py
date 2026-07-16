@@ -108,6 +108,20 @@ def test_compose_uses_required_environment_substitution() -> None:
         assert literal not in lowered
 
 
+def test_compose_requires_frontend_health_before_readiness() -> None:
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    frontend = compose.split("\n  frontend:\n", 1)[1].split("\nvolumes:\n", 1)[0]
+
+    assert "healthcheck:" in frontend
+    assert '["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]' in frontend
+    assert "CMD-SHELL" not in frontend
+    assert "http://localhost/" not in frontend
+    assert "interval: 15s" in frontend
+    assert "timeout: 5s" in frontend
+    assert "retries: 10" in frontend
+    assert "start_period: 10s" in frontend
+
+
 def test_deploy_bootstrap_is_idempotent_and_non_destructive() -> None:
     dockerfile = (REPOSITORY_ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
     bootstrap = (

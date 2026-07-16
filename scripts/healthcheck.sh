@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+HTTP_CONNECT_TIMEOUT_SECONDS="${HOSPRIME_HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
+HTTP_MAX_TIME_SECONDS="${HOSPRIME_HTTP_MAX_TIME_SECONDS:-15}"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
@@ -19,6 +21,15 @@ container_state() {
 }
 container_health() {
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1"
+}
+http_get() {
+  curl \
+    --fail \
+    --silent \
+    --show-error \
+    --connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+    --max-time "$HTTP_MAX_TIME_SECONDS" \
+    "$1"
 }
 
 require docker
@@ -50,9 +61,9 @@ for service in postgres redis neo4j backend; do
   [[ "$health" == "healthy" ]] || fail "Service is not healthy: $service ($health)"
 done
 
-curl --fail --silent --show-error "$BACKEND_URL/health/live" > "$TMP_DIR/live.json"
-curl --fail --silent --show-error "$BACKEND_URL/health/ready" > "$TMP_DIR/ready.json"
-curl --fail --silent --show-error "$FRONTEND_URL/" > "$TMP_DIR/frontend.html"
+http_get "$BACKEND_URL/health/live" > "$TMP_DIR/live.json"
+http_get "$BACKEND_URL/health/ready" > "$TMP_DIR/ready.json"
+http_get "$FRONTEND_URL/" > "$TMP_DIR/frontend.html"
 [[ -s "$TMP_DIR/frontend.html" ]] || fail "Frontend returned an empty response"
 
 python3 - "$TMP_DIR/live.json" "$TMP_DIR/ready.json" <<'PY'

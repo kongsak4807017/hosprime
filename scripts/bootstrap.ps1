@@ -24,7 +24,10 @@ try {
         exit 2
     }
 
-    if (Select-String -LiteralPath $EnvFile -Pattern '(^|=)CHANGE_ME' -Quiet) {
+    $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {
+        $_ -notmatch '^\s*(#|$)' -and $_ -match 'CHANGE_ME'
+    } | Select-Object -First 1
+    if ($null -ne $placeholderLine) {
         Fail "$EnvFile still contains CHANGE_ME placeholders."
     }
 

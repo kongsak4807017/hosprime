@@ -113,7 +113,9 @@ def test_compose_requires_frontend_health_before_readiness() -> None:
     frontend = compose.split("\n  frontend:\n", 1)[1].split("\nvolumes:\n", 1)[0]
 
     assert "healthcheck:" in frontend
-    assert "wget --quiet --spider http://localhost/" in frontend
+    assert '["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]' in frontend
+    assert "CMD-SHELL" not in frontend
+    assert "http://localhost/" not in frontend
     assert "interval: 15s" in frontend
     assert "timeout: 5s" in frontend
     assert "retries: 10" in frontend

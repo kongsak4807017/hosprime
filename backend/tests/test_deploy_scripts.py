@@ -51,7 +51,7 @@ def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
         assert "FRONTEND_PORT" in content
 
 
-def test_healthchecks_require_container_health_not_only_running_state() -> None:
+def test_healthchecks_require_docker_health_for_all_five_services() -> None:
     shell = read("scripts/healthcheck.sh")
     powershell = read("scripts/healthcheck.ps1")
 
@@ -59,9 +59,10 @@ def test_healthchecks_require_container_health_not_only_running_state() -> None:
         assert "docker inspect" in content
         assert "State.Health.Status" in content
         assert "healthy" in content
+        assert "ps --status running --services" not in content
 
-    assert "ps --status running --services" not in shell
-    assert "ps --status running --services" not in powershell
+    assert "for service in postgres redis neo4j backend frontend; do" in shell
+    assert "foreach ($service in @('postgres', 'redis', 'neo4j', 'backend', 'frontend'))" in powershell
 
 
 def test_healthchecks_require_full_readiness_not_degraded_state() -> None:

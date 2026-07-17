@@ -63,7 +63,10 @@ SAFE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)^(?:example|sample|dummy|fake|placeholder)(?:[_-][a-z0-9_-]+)?$"),
     re.compile(r"(?i)^(?:ci|test)[_-][a-z0-9_-]*not[_-]for[_-]production$"),
     re.compile(r"(?i)^(?:null|none|nil|~)$"),
-    re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?\}$"),
+    # Allow only direct references and required-value assertions. Compose default
+    # and alternate forms (for example ${NAME:-literal} or ${NAME:+literal}) can
+    # embed fixed credentials and must therefore be reported.
+    re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?:(?::)?\?[^}]*)?\}$"),
     re.compile(r"(?i)^\$env:[A-Za-z_][A-Za-z0-9_]*$"),
     re.compile(r"(?i)^getenv\([^)]{1,200}\)$"),
 )
@@ -127,7 +130,9 @@ def assignment_is_safe(value: str) -> bool:
     Substring matching is intentionally prohibited: a real credential containing
     words such as ``example`` or ``test`` must still be reported. CI or test
     literals are allowed only when the complete value explicitly ends with a
-    ``not-for-production`` marker.
+    ``not-for-production`` marker. Environment substitutions are safe only when
+    they are direct references or required-value assertions; fallback and alternate
+    values may contain fixed credentials and are rejected.
     """
 
     compact = value.strip()

@@ -221,24 +221,42 @@ def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
     return findings
 
 
+def validate_git_range(git_range: str) -> str:
+    """Reject revision ranges that Git could interpret as command-line options.
+
+    The range is passed to ``git diff`` before the path separator, so a leading
+    hyphen could override safety flags such as ``--no-ext-diff``. Control
+    characters are rejected to keep errors and evidence structurally trustworthy.
+    """
+
+    if not git_range or git_range.startswith("-"):
+        raise RuntimeError("Git revision range is empty or option-like")
+    if any(ord(character) < 32 or ord(character) == 127 for character in git_range):
+        raise RuntimeError("Git revision range contains unsafe control characters")
+    return git_range
+
+
 def scan_added_diff(git_range: str) -> list[Finding]:
     """Scan added lines without executing repository-configured diff helpers.
 
     ``--no-ext-diff`` and ``--no-textconv`` keep this security gate data-only. A
     local or repository-associated diff driver must never execute code as a side
-    effect of inspecting a pull request or push range.
+    effect of inspecting a pull request or push range. The revision range is
+    validated so it cannot be interpreted as a later Git option that re-enables a
+    disabled helper.
     """
 
+    validated_range = validate_git_range(git_range)
     raw_diff = run_git(
         "diff",
         "--unified=0",
         "--no-color",
         "--no-ext-diff",
         "--no-textconv",
-        git_range,
+        validated_range,
         "--",
     )
-    diff = decode_utf8(raw_diff, f"git diff {git_range}")
+    diff = decode_utf8(raw_diff, f"git diff {validated_range}")
     findings: list[Finding] = []
     current_path = "<diff>"
     new_line = 0

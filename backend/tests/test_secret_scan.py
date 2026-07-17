@@ -76,7 +76,7 @@ class SecretScanTests(unittest.TestCase):
             sum(item.rule == "credential-assignment" for item in findings), 2
         )
 
-    def test_safe_placeholders_ci_values_and_empty_literals_are_allowed(self) -> None:
+    def test_safe_placeholders_explicit_nonproduction_values_and_empty_literals_are_allowed(self) -> None:
         field_name = "PASS" + "WORD"
         field_b = "SEC" + "RET"
         provider_field = "API_" + "KEY"
@@ -92,6 +92,21 @@ class SecretScanTests(unittest.TestCase):
             )
         )
         self.assertEqual(scanner_module.scan_text(".env.example", text), [])
+
+    def test_ambiguous_ci_and_test_literals_are_not_allowlisted(self) -> None:
+        field_name = "PASS" + "WORD"
+        field_b = "SEC" + "RET"
+        text = "\n".join(
+            (
+                f"ADMIN_{field_name}=test-password",
+                f"JWT_{field_b}=ci-secret",
+                f"DATABASE_{field_name}=test-local-only",
+            )
+        )
+        findings = scanner_module.scan_text("settings.env", text)
+        self.assertEqual(
+            sum(item.rule == "credential-assignment" for item in findings), 3
+        )
 
     def test_safe_marker_substrings_do_not_hide_real_credentials(self) -> None:
         field_name = "PASS" + "WORD"

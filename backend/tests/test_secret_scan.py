@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -158,6 +159,20 @@ class SecretScanTests(unittest.TestCase):
         self.assertEqual(
             scanner_module.scan_text(".env.example", "DATABASE_URL=" + uri), []
         )
+
+    def test_candidate_text_file_with_nul_bytes_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.env"
+            path.write_bytes(b"ADMIN_PASSWORD=abc\x00hidden")
+            with self.assertRaisesRegex(RuntimeError, "contains NUL bytes"):
+                scanner_module.scan_tracked_files([path])
+
+    def test_oversized_candidate_text_file_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.env"
+            path.write_bytes(b"x" * (scanner_module.MAX_FILE_BYTES + 1))
+            with self.assertRaisesRegex(RuntimeError, "exceeds .* byte scan limit"):
+                scanner_module.scan_tracked_files([path])
 
     def test_deduplicate_returns_deterministic_unique_findings(self) -> None:
         finding = scanner_module.Finding(

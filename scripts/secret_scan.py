@@ -104,6 +104,17 @@ def run_git(*args: str) -> bytes:
     return completed.stdout
 
 
+def decode_utf8(data: bytes, source: str) -> str:
+    """Decode scanner input strictly so malformed bytes cannot hide credentials."""
+
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(
+            f"{source} is not valid UTF-8 and cannot be safely scanned"
+        ) from exc
+
+
 def redact(_value: str) -> str:
     """Return a constant marker without disclosing any original character."""
 
@@ -177,8 +188,9 @@ def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
     """Scan candidate tracked text files and fail closed on unreadable/unsafe input.
 
     Candidate configuration and source files must never be silently skipped because
-    they are oversized or contain NUL bytes. Both conditions can hide credentials
-    from line-based scanning, so they are explicit scanner errors requiring review.
+    they are oversized, contain NUL bytes, or contain malformed UTF-8. Those
+    conditions can hide credentials from line-based scanning, so they are explicit
+    scanner errors requiring review.
     """
 
     findings: list[Finding] = []
@@ -198,14 +210,14 @@ def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
             raise RuntimeError(
                 f"tracked text file contains NUL bytes and cannot be safely scanned: {path}"
             )
-        findings.extend(scan_text(path.as_posix(), data.decode("utf-8", errors="replace")))
+        text = decode_utf8(data, f"tracked text file {path}")
+        findings.extend(scan_text(path.as_posix(), text))
     return findings
 
 
 def scan_added_diff(git_range: str) -> list[Finding]:
-    diff = run_git("diff", "--unified=0", "--no-color", git_range, "--").decode(
-        "utf-8", errors="replace"
-    )
+    raw_diff = run_git("diff", "--unified=0", "--no-color", git_range, "--")
+    diff = decode_utf8(raw_diff, f"git diff {git_range}")
     findings: list[Finding] = []
     current_path = "<diff>"
     new_line = 0

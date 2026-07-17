@@ -1,0 +1,63 @@
+import contextlib
+import io
+import sys
+import unittest
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+MODULE_NAME = "hosprime_secret_scan_entry"
+SPEC = spec_from_file_location(MODULE_NAME, ROOT / "scripts" / "secret_scan_entry.py")
+assert SPEC and SPEC.loader
+entry_module = module_from_spec(SPEC)
+sys.modules[MODULE_NAME] = entry_module
+SPEC.loader.exec_module(entry_module)
+
+
+class SecretScanGitPathTests(unittest.TestCase):
+    def test_invalid_utf8_tracked_path_fails_closed_without_echoing_bytes(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "not valid UTF-8") as context:
+            entry_module.validate_tracked_path_bytes(b"safe.env\0bad-\xff.env\0")
+
+        self.assertNotIn("bad", str(context.exception))
+        self.assertNotIn("\\xff", str(context.exception))
+
+    def test_control_character_tracked_path_fails_closed_without_echoing_path(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "control characters") as context:
+            entry_module.validate_tracked_path_bytes(
+                b"safe.env\0forged\nSECRET SCAN PASSED.env\0"
+            )
+
+        self.assertNotIn("forged", str(context.exception))
+        self.assertNotIn("SECRET SCAN PASSED", str(context.exception))
+
+    def test_parent_traversal_path_fails_closed(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "outside the repository boundary"):
+            entry_module.validate_tracked_path_bytes(b"../outside.env\0")
+
+    def test_valid_utf8_repository_paths_are_returned(self) -> None:
+        self.assertEqual(
+            entry_module.validate_tracked_path_bytes(
+                "settings.env\0docs/คู่มือ.md\0".encode("utf-8")
+            ),
+            ["settings.env", "docs/คู่มือ.md"],
+        )
+
+    def test_main_returns_controlled_error_before_importing_scanner(self) -> None:
+        stderr = io.StringIO()
+        with patch.object(
+            entry_module,
+            "validate_tracked_paths",
+            side_effect=RuntimeError("Git index contains a tracked path with control characters"),
+        ):
+            with contextlib.redirect_stderr(stderr):
+                exit_code = entry_module.main([])
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("SECRET SCAN ERROR", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

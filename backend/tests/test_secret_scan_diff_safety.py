@@ -45,6 +45,23 @@ class SecretScanDiffSafetyTests(unittest.TestCase):
         self.assertEqual(findings[0].redacted, "<redacted>")
         self.assertNotIn("synthetic-local-value", repr(findings))
 
+    def test_option_like_revision_range_cannot_override_diff_safety_flags(self) -> None:
+        for unsafe_range in ("--ext-diff", "--textconv", "-p"):
+            with self.subTest(git_range=unsafe_range):
+                with patch.object(secret_scan, "run_git") as run_git:
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        "revision range is empty or option-like",
+                    ):
+                        secret_scan.scan_added_diff(unsafe_range)
+                run_git.assert_not_called()
+
+    def test_revision_range_control_characters_fail_before_git_execution(self) -> None:
+        with patch.object(secret_scan, "run_git") as run_git:
+            with self.assertRaisesRegex(RuntimeError, "unsafe control characters"):
+                secret_scan.scan_added_diff("origin/main...HEAD\n--ext-diff")
+        run_git.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

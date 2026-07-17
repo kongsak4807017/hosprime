@@ -222,7 +222,22 @@ def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
 
 
 def scan_added_diff(git_range: str) -> list[Finding]:
-    raw_diff = run_git("diff", "--unified=0", "--no-color", git_range, "--")
+    """Scan added lines without executing repository-configured diff helpers.
+
+    ``--no-ext-diff`` and ``--no-textconv`` keep this security gate data-only. A
+    local or repository-associated diff driver must never execute code as a side
+    effect of inspecting a pull request or push range.
+    """
+
+    raw_diff = run_git(
+        "diff",
+        "--unified=0",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        git_range,
+        "--",
+    )
     diff = decode_utf8(raw_diff, f"git diff {git_range}")
     findings: list[Finding] = []
     current_path = "<diff>"

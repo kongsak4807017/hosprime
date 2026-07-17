@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """Fail-closed entrypoint for the HosPrime repository secret scanner.
 
-Git permits filenames that are not valid UTF-8 or that contain terminal control
-characters. Validate the complete tracked-path list before importing and running
-the scanner so malformed paths cannot produce an uncontrolled traceback, forge CI
-output, or evade the repository security gate.
+Git permits filenames that are not valid UTF-8 or that contain characters capable
+of altering terminal and CI-log presentation. Validate the complete tracked-path
+list before importing and running the scanner so malformed paths cannot produce an
+uncontrolled traceback, forge evidence output, or evade the repository security gate.
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Sequence
+
+
+UNSAFE_UNICODE_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
 
 
 def run_git_ls_files() -> bytes:
@@ -23,16 +27,20 @@ def run_git_ls_files() -> bytes:
         stderr=subprocess.PIPE,
     )
     if completed.returncode != 0:
-        message = completed.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"git ls-files -z failed: {message}")
+        # Do not echo Git stderr. A repository-controlled path may be present in the
+        # message and could contain control or formatting characters.
+        raise RuntimeError(
+            f"git ls-files -z failed with exit status {completed.returncode}"
+        )
     return completed.stdout
 
 
 def validate_tracked_path_bytes(raw: bytes) -> list[str]:
     """Return safe repository-relative paths or fail closed.
 
-    Error messages intentionally contain no undecodable filename bytes or control
-    characters from the Git index.
+    Error messages intentionally contain no undecodable filename bytes, filename text,
+    control characters, bidi overrides, zero-width format controls, or Unicode line /
+    paragraph separators from the Git index.
     """
 
     validated: list[str] = []
@@ -46,9 +54,12 @@ def validate_tracked_path_bytes(raw: bytes) -> list[str]:
                 "Git index contains a tracked path that is not valid UTF-8"
             ) from exc
 
-        if any(ord(character) < 32 or ord(character) == 127 for character in path):
+        if any(
+            unicodedata.category(character) in UNSAFE_UNICODE_CATEGORIES
+            for character in path
+        ):
             raise RuntimeError(
-                "Git index contains a tracked path with control characters"
+                "Git index contains a tracked path with unsafe control or format characters"
             )
 
         candidate = Path(path)

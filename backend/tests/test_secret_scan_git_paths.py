@@ -4,6 +4,7 @@ import sys
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,12 +25,29 @@ class SecretScanGitPathTests(unittest.TestCase):
         self.assertNotIn("\\xff", str(context.exception))
 
     def test_control_character_tracked_path_fails_closed_without_echoing_path(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "control characters") as context:
+        with self.assertRaisesRegex(RuntimeError, "unsafe control or format") as context:
             entry_module.validate_tracked_path_bytes(
                 b"safe.env\0forged\nSECRET SCAN PASSED.env\0"
             )
 
         self.assertNotIn("forged", str(context.exception))
+        self.assertNotIn("SECRET SCAN PASSED", str(context.exception))
+
+    def test_unicode_bidi_override_path_fails_closed_without_echoing_path(self) -> None:
+        unsafe_path = "safe/visible\u202egnp.exe.env"
+        with self.assertRaisesRegex(RuntimeError, "unsafe control or format") as context:
+            entry_module.validate_tracked_path_bytes(
+                f"safe.env\0{unsafe_path}\0".encode("utf-8")
+            )
+
+        self.assertNotIn("visible", str(context.exception))
+        self.assertNotIn("exe", str(context.exception))
+
+    def test_unicode_line_separator_path_fails_closed(self) -> None:
+        unsafe_path = "forged\u2028SECRET SCAN PASSED.env"
+        with self.assertRaisesRegex(RuntimeError, "unsafe control or format") as context:
+            entry_module.validate_tracked_path_bytes(unsafe_path.encode("utf-8") + b"\0")
+
         self.assertNotIn("SECRET SCAN PASSED", str(context.exception))
 
     def test_parent_traversal_path_fails_closed(self) -> None:
@@ -44,12 +62,25 @@ class SecretScanGitPathTests(unittest.TestCase):
             ["settings.env", "docs/คู่มือ.md"],
         )
 
+    def test_git_failure_does_not_echo_untrusted_stderr(self) -> None:
+        forged_stderr = b"fatal: forged\nSECRET SCAN PASSED\n"
+        completed = SimpleNamespace(returncode=128, stdout=b"", stderr=forged_stderr)
+        with patch.object(entry_module.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "exit status 128") as context:
+                entry_module.run_git_ls_files()
+
+        message = str(context.exception)
+        self.assertNotIn("forged", message)
+        self.assertNotIn("SECRET SCAN PASSED", message)
+
     def test_main_returns_controlled_error_before_importing_scanner(self) -> None:
         stderr = io.StringIO()
         with patch.object(
             entry_module,
             "validate_tracked_paths",
-            side_effect=RuntimeError("Git index contains a tracked path with control characters"),
+            side_effect=RuntimeError(
+                "Git index contains a tracked path with unsafe control or format characters"
+            ),
         ):
             with contextlib.redirect_stderr(stderr):
                 exit_code = entry_module.main([])

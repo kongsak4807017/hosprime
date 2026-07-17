@@ -3,8 +3,8 @@
 
 The main secret scanner intentionally limits ordinary text scanning to known source and
 configuration suffixes. This companion gate closes the resulting blind spot for common
-credential containers and sensitive text formats without printing file contents or
-credential values.
+credential containers, extensionless private keys, authentication dotfiles and sensitive
+text formats without printing file contents or credential values.
 """
 
 from __future__ import annotations
@@ -28,6 +28,20 @@ SENSITIVE_TEXT_SUFFIXES = {
     ".xml",
 }
 
+# These files commonly hold literal credentials or private-key material but have no
+# useful suffix for the ordinary source/configuration scanner to select.
+SENSITIVE_TEXT_BASENAMES = {
+    ".git-credentials",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "credentials",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_rsa",
+}
+
 FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
     ".jks",
     ".kdbx",
@@ -45,9 +59,10 @@ def sensitive_paths(paths: Iterable[str]) -> tuple[list[Path], list[Path]]:
     for raw_path in paths:
         path = Path(raw_path)
         suffix = path.suffix.lower()
+        basename = path.name.lower()
         if suffix in FORBIDDEN_CREDENTIAL_STORE_SUFFIXES:
             forbidden_stores.append(path)
-        elif suffix in SENSITIVE_TEXT_SUFFIXES:
+        elif suffix in SENSITIVE_TEXT_SUFFIXES or basename in SENSITIVE_TEXT_BASENAMES:
             text_files.append(path)
     return text_files, forbidden_stores
 

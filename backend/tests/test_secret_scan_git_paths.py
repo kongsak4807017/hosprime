@@ -110,6 +110,22 @@ class SecretScanGitPathTests(unittest.TestCase):
             [Path("settings.env"), Path("docs/คู่มือ.md")],
         )
 
+    def test_explicit_empty_arguments_do_not_inherit_host_process_arguments(self) -> None:
+        observed: dict[str, object] = {}
+
+        def scanner_main(argv: list[str]) -> int:
+            observed["argv"] = argv
+            return 0
+
+        fake_scanner = SimpleNamespace(main=scanner_main)
+        with patch.object(entry_module, "validate_tracked_paths", return_value=["safe.env"]):
+            with patch.dict(sys.modules, {"secret_scan": fake_scanner}):
+                with patch.object(sys, "argv", ["unittest", "--unexpected-host-flag"]):
+                    exit_code = entry_module.main([])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(observed["argv"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

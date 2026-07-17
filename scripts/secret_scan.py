@@ -185,18 +185,24 @@ def tracked_paths() -> list[Path]:
 
 
 def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
-    """Scan candidate tracked text files and fail closed on unreadable/unsafe input.
+    """Scan candidate tracked text files and fail closed on unsafe input.
 
     Candidate configuration and source files must never be silently skipped because
-    they are oversized, contain NUL bytes, or contain malformed UTF-8. Those
-    conditions can hide credentials from line-based scanning, so they are explicit
-    scanner errors requiring review.
+    they are symlinks, oversized, contain NUL bytes, or contain malformed UTF-8.
+    Following a tracked symlink could read outside the checkout, while a dangling
+    symlink could bypass scanning entirely, so both conditions are explicit errors.
     """
 
     findings: list[Finding] = []
     for path in paths:
-        if not should_scan(path) or not path.is_file():
+        if not should_scan(path):
             continue
+        if path.is_symlink():
+            raise RuntimeError(
+                f"tracked text path is a symbolic link and cannot be safely scanned: {path}"
+            )
+        if not path.is_file():
+            raise RuntimeError(f"tracked text path is not a regular file: {path}")
         try:
             file_size = path.stat().st_size
             if file_size > MAX_FILE_BYTES:

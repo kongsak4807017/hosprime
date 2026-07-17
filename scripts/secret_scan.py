@@ -61,7 +61,7 @@ URI_USERINFO_RE = re.compile(
 SAFE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)^(?:change[_-]?me|changeme)(?:[_-][a-z0-9_-]+)?$"),
     re.compile(r"(?i)^(?:example|sample|dummy|fake|placeholder)(?:[_-][a-z0-9_-]+)?$"),
-    re.compile(r"(?i)^(?:ci|test)[_-][a-z0-9_-]*(?:not[_-]for[_-]production)?$"),
+    re.compile(r"(?i)^(?:ci|test)[_-][a-z0-9_-]*not[_-]for[_-]production$"),
     re.compile(r"(?i)^(?:null|none|nil|~)$"),
     re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?\}$"),
     re.compile(r"(?i)^\$env:[A-Za-z_][A-Za-z0-9_]*$"),
@@ -114,7 +114,9 @@ def assignment_is_safe(value: str) -> bool:
     """Allow only explicit, whole-value placeholders or environment references.
 
     Substring matching is intentionally prohibited: a real credential containing
-    words such as ``example`` or ``test`` must still be reported.
+    words such as ``example`` or ``test`` must still be reported. CI or test
+    literals are allowed only when the complete value explicitly ends with a
+    ``not-for-production`` marker.
     """
 
     compact = value.strip()

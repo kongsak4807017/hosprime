@@ -77,15 +77,18 @@ def validate_tracked_paths() -> list[str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     try:
-        validate_tracked_paths()
+        validated_paths = validate_tracked_paths()
     except RuntimeError as exc:
         print(f"SECRET SCAN ERROR: {exc}", file=sys.stderr)
         return 2
 
-    # Import after path validation so secret_scan.tracked_paths() cannot encounter
-    # malformed path bytes during the controlled workflow invocation.
+    # Import only after validation, then pin the scanner to the exact validated path
+    # snapshot. Without this handoff the scanner would execute a second `git ls-files`
+    # call, creating a time-of-check/time-of-use gap where the index could change after
+    # validation or malformed path bytes could be reintroduced.
     import secret_scan
 
+    secret_scan.tracked_paths = lambda: [Path(path) for path in validated_paths]
     return secret_scan.main(argv or sys.argv[1:])
 
 

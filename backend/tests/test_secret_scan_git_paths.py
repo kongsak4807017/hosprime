@@ -89,6 +89,27 @@ class SecretScanGitPathTests(unittest.TestCase):
         self.assertIn("SECRET SCAN ERROR", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_main_pins_scanner_to_exact_validated_path_snapshot(self) -> None:
+        observed: dict[str, object] = {}
+
+        def scanner_main(argv: list[str]) -> int:
+            observed["argv"] = argv
+            observed["paths"] = fake_scanner.tracked_paths()
+            return 0
+
+        fake_scanner = SimpleNamespace(main=scanner_main)
+        validated = ["settings.env", "docs/คู่มือ.md"]
+        with patch.object(entry_module, "validate_tracked_paths", return_value=validated):
+            with patch.dict(sys.modules, {"secret_scan": fake_scanner}):
+                exit_code = entry_module.main(["--git-range", "base...head"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(observed["argv"], ["--git-range", "base...head"])
+        self.assertEqual(
+            observed["paths"],
+            [Path("settings.env"), Path("docs/คู่มือ.md")],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

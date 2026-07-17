@@ -23,13 +23,26 @@ SPEC.loader.exec_module(secret_artifact_gate)
 
 
 class SecretArtifactGateTests(unittest.TestCase):
-    def test_sensitive_text_suffixes_are_selected(self) -> None:
+    def test_sensitive_text_suffixes_and_basenames_are_selected(self) -> None:
         text_files, forbidden = secret_artifact_gate.sensitive_paths(
-            ["certs/service.pem", "config/app.properties", "notes/readme.md"]
+            [
+                "certs/service.pem",
+                "config/app.properties",
+                "home/.npmrc",
+                "ssh/id_ed25519",
+                "profiles/credentials",
+                "notes/readme.md",
+            ]
         )
         self.assertEqual(
             [path.as_posix() for path in text_files],
-            ["certs/service.pem", "config/app.properties"],
+            [
+                "certs/service.pem",
+                "config/app.properties",
+                "home/.npmrc",
+                "ssh/id_ed25519",
+                "profiles/credentials",
+            ],
         )
         self.assertEqual(forbidden, [])
 
@@ -67,6 +80,40 @@ class SecretArtifactGateTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].rule, "private-key")
         self.assertEqual(findings[0].redacted, "<redacted>")
+
+    def test_extensionless_private_key_is_detected_with_constant_redaction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                path = Path("id_rsa")
+                path.write_text(
+                    "-----BEGIN PRIVATE KEY-----\nsynthetic-extensionless-fixture\n",
+                    encoding="utf-8",
+                )
+                findings = secret_artifact_gate.scan_sensitive_text_files([path])
+            finally:
+                os.chdir(previous)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "private-key")
+        self.assertEqual(findings[0].redacted, "<redacted>")
+
+    def test_authentication_dotfile_literal_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                path = Path(".npmrc")
+                field = "auth" + "Token"
+                path.write_text(
+                    f"//registry.invalid/:_{field}=synthetic-not-a-real-value\n",
+                    encoding="utf-8",
+                )
+                findings = secret_artifact_gate.scan_sensitive_text_files([path])
+            finally:
+                os.chdir(previous)
+        self.assertTrue(findings)
+        self.assertTrue(all(item.redacted == "<redacted>" for item in findings))
 
     def test_sensitive_text_nul_bytes_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

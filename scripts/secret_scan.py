@@ -174,18 +174,30 @@ def tracked_paths() -> list[Path]:
 
 
 def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
+    """Scan candidate tracked text files and fail closed on unreadable/unsafe input.
+
+    Candidate configuration and source files must never be silently skipped because
+    they are oversized or contain NUL bytes. Both conditions can hide credentials
+    from line-based scanning, so they are explicit scanner errors requiring review.
+    """
+
     findings: list[Finding] = []
     for path in paths:
         if not should_scan(path) or not path.is_file():
             continue
         try:
-            if path.stat().st_size > MAX_FILE_BYTES:
-                continue
+            file_size = path.stat().st_size
+            if file_size > MAX_FILE_BYTES:
+                raise RuntimeError(
+                    f"tracked text file exceeds {MAX_FILE_BYTES} byte scan limit: {path}"
+                )
             data = path.read_bytes()
         except OSError as exc:
             raise RuntimeError(f"cannot read tracked file {path}: {exc}") from exc
         if b"\0" in data:
-            continue
+            raise RuntimeError(
+                f"tracked text file contains NUL bytes and cannot be safely scanned: {path}"
+            )
         findings.extend(scan_text(path.as_posix(), data.decode("utf-8", errors="replace")))
     return findings
 

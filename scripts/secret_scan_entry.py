@@ -90,12 +90,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     secret_scan.tracked_paths = lambda: [Path(path) for path in validated_paths]
 
-    # An explicitly supplied empty argument sequence means "run the default full-tree
-    # scan". Using truthiness here would accidentally substitute unrelated host-process
-    # arguments (for example unittest or an embedding tool), changing scanner scope or
-    # causing an argument-parse failure. Only None delegates to the process command line.
+    # The scanner's direct main function currently uses a truthiness fallback for argv,
+    # so passing [] would make it consume unrelated host-process arguments. Isolate the
+    # process argv explicitly and call main(None), which preserves both an intentional
+    # empty list (default full-tree scan) and any explicitly supplied scanner options.
     effective_argv = list(sys.argv[1:] if argv is None else argv)
-    return secret_scan.main(effective_argv)
+    original_argv = sys.argv
+    try:
+        sys.argv = [original_argv[0], *effective_argv]
+        return secret_scan.main(None)
+    finally:
+        sys.argv = original_argv
 
 
 if __name__ == "__main__":

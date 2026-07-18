@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-import secret_scan
 import secret_scan_entry
 
 
@@ -51,6 +50,21 @@ FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
 }
 
 
+def _load_scanner() -> Any:
+    """Load the scanner and current M0 rules after path validation.
+
+    Keeping this import lazy preserves the same validation-before-import boundary used by
+    the controlled full-tree entrypoint. Installing the M0 rules here also prevents the
+    sensitive-artifact gate from missing formats such as encrypted PKCS#8 private keys.
+    """
+
+    import secret_scan
+    import secret_scan_m0_entry
+
+    secret_scan_m0_entry.install_modern_rules()
+    return secret_scan
+
+
 def sensitive_paths(paths: Iterable[str]) -> tuple[list[Path], list[Path]]:
     """Partition tracked paths into sensitive text files and forbidden stores."""
 
@@ -67,10 +81,11 @@ def sensitive_paths(paths: Iterable[str]) -> tuple[list[Path], list[Path]]:
     return text_files, forbidden_stores
 
 
-def scan_sensitive_text_files(paths: Iterable[Path]) -> list[secret_scan.Finding]:
+def scan_sensitive_text_files(paths: Iterable[Path]) -> list[Any]:
     """Scan sensitive text formats using the same fail-closed input controls."""
 
-    findings: list[secret_scan.Finding] = []
+    secret_scan = _load_scanner()
+    findings: list[Any] = []
     for path in paths:
         if path.is_symlink():
             raise RuntimeError("tracked sensitive text artifact is a symbolic link")
@@ -92,6 +107,9 @@ def scan_sensitive_text_files(paths: Iterable[Path]) -> list[secret_scan.Finding
 
 def main() -> int:
     try:
+        # Validate the complete Git path snapshot before importing scanner code. This
+        # prevents malformed or presentation-control filenames from reaching either the
+        # core scanner or the modern-rule extension layer.
         tracked = secret_scan_entry.validate_tracked_paths()
         text_files, forbidden_stores = sensitive_paths(tracked)
         if forbidden_stores:
@@ -101,9 +119,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+        secret_scan = _load_scanner()
         findings = secret_scan.deduplicate(scan_sensitive_text_files(text_files))
-    except RuntimeError as exc:
-        print(f"SECRET ARTIFACT GATE ERROR: {exc}", file=sys.stderr)
+    except RuntimeError:
+        print(
+            "SECRET ARTIFACT GATE ERROR: selected scope could not be safely scanned",
+            file=sys.stderr,
+        )
         return 2
 
     if findings:

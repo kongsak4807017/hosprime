@@ -43,6 +43,32 @@ class SecretScanModernPatternTests(unittest.TestCase):
         self.assertNotIn(value[:8], repr(matching[0]))
         self.assertNotIn(value[-8:], repr(matching[0]))
 
+    def test_gitlab_prefixed_tokens_are_detected_and_fully_redacted(self) -> None:
+        prefixes = ("glpat", "gldt", "glrt", "glcbt", "glptt", "glagent")
+        text = "\n".join(
+            f"value_{index}={prefix}-{'A' * 32}"
+            for index, prefix in enumerate(prefixes)
+        )
+        findings = scanner.scan_text("settings.txt", text)
+        matching = [item for item in findings if item.rule == "gitlab-token"]
+
+        self.assertEqual(len(matching), len(prefixes))
+        self.assertTrue(all(item.redacted == "<redacted>" for item in matching))
+        self.assertTrue(all("gl" not in item.redacted for item in matching))
+
+    def test_stripe_live_secret_key_is_detected_without_flagging_test_key(self) -> None:
+        live_value = "sk_" + "live_" + ("A" * 32)
+        test_value = "sk_" + "test_" + ("B" * 32)
+        findings = scanner.scan_text(
+            "settings.txt", f"live={live_value}\ntest={test_value}"
+        )
+        matching = [item for item in findings if item.rule == "stripe-live-secret-key"]
+
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].redacted, "<redacted>")
+        self.assertNotIn(live_value[:8], repr(matching[0]))
+        self.assertFalse(any(test_value in repr(item) for item in findings))
+
     def test_encrypted_pkcs8_private_key_header_is_detected(self) -> None:
         header = "-----BEGIN " + "ENCRYPTED PRIVATE KEY-----"
         findings = scanner.scan_text("identity.pem", header)
@@ -56,6 +82,8 @@ class SecretScanModernPatternTests(unittest.TestCase):
         names = [rule.name for rule in scanner.HIGH_CONFIDENCE_RULES]
 
         self.assertEqual(names.count("github-fine-grained-pat"), 1)
+        self.assertEqual(names.count("gitlab-token"), 1)
+        self.assertEqual(names.count("stripe-live-secret-key"), 1)
         self.assertEqual(names.count("encrypted-private-key"), 1)
 
     def test_path_validation_failure_prevents_scanner_import(self) -> None:

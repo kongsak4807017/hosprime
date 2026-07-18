@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_NAME = "hosprime_secret_scan_symlinks"
@@ -42,6 +43,28 @@ class SecretScanSymlinkTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "symbolic link"):
                 scanner_module.scan_tracked_files([tracked_link])
+
+    def test_regular_file_swapped_to_symlink_before_read_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracked = root / "settings.env"
+            external = root / "external.env"
+            tracked.write_text("SAFE=value", encoding="utf-8")
+            external.write_text(
+                "ADMIN_PASSWORD=synthetic-race-secret", encoding="utf-8"
+            )
+
+            original_read_bytes = Path.read_bytes
+
+            def swap_then_read(path: Path) -> bytes:
+                if path == tracked:
+                    path.unlink()
+                    self.create_symlink(external, path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, "read_bytes", swap_then_read):
+                with self.assertRaisesRegex(RuntimeError, "safely read"):
+                    scanner_module.scan_tracked_files([tracked])
 
     def test_regular_candidate_file_is_still_scanned(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

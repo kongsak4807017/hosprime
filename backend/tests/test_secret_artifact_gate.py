@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -178,6 +179,86 @@ class SecretArtifactGateTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
         self.assertEqual(findings, [])
+
+    def test_sensitive_finding_uses_fingerprint_without_path_disclosure(self) -> None:
+        sensitive_path = "private/credential-like-filename.pem"
+        finding = SimpleNamespace(
+            path=sensitive_path,
+            line=7,
+            rule="private-key",
+            redacted="<redacted>",
+        )
+
+        rendered = secret_artifact_gate.format_finding(finding)
+
+        self.assertEqual(
+            rendered,
+            "path-sha256="
+            f"{secret_artifact_gate.secret_scan_entry.path_fingerprint(sensitive_path)}:"
+            "7: private-key: <redacted>",
+        )
+        self.assertNotIn(sensitive_path, rendered)
+        self.assertNotIn("credential-like", rendered)
+
+    def test_main_withholds_sensitive_finding_path(self) -> None:
+        sensitive_path = "private/credential-like-filename.pem"
+        finding = SimpleNamespace(
+            path=sensitive_path,
+            line=11,
+            rule="encrypted-private-key",
+            redacted="<redacted>",
+        )
+        scanner = SimpleNamespace(deduplicate=lambda findings: list(findings))
+
+        with mock.patch.object(
+            secret_artifact_gate.secret_scan_entry,
+            "validate_tracked_paths",
+            return_value=[sensitive_path],
+        ), mock.patch.object(
+            secret_artifact_gate, "_load_scanner", return_value=scanner
+        ), mock.patch.object(
+            secret_artifact_gate,
+            "scan_sensitive_text_files",
+            return_value=[finding],
+        ), mock.patch("builtins.print") as output:
+            result = secret_artifact_gate.main()
+
+        self.assertEqual(result, 1)
+        rendered = "\n".join(
+            str(argument)
+            for call in output.call_args_list
+            for argument in call.args
+        )
+        self.assertIn("path-sha256=", rendered)
+        self.assertIn("11: encrypted-private-key: <redacted>", rendered)
+        self.assertNotIn(sensitive_path, rendered)
+        self.assertNotIn("credential-like", rendered)
+
+    def test_malformed_finding_fails_closed_without_partial_finding_output(self) -> None:
+        malformed = SimpleNamespace(path="private/unsafe.pem", line="not-a-line")
+        scanner = SimpleNamespace(deduplicate=lambda findings: list(findings))
+
+        with mock.patch.object(
+            secret_artifact_gate.secret_scan_entry,
+            "validate_tracked_paths",
+            return_value=["private/unsafe.pem"],
+        ), mock.patch.object(
+            secret_artifact_gate, "_load_scanner", return_value=scanner
+        ), mock.patch.object(
+            secret_artifact_gate,
+            "scan_sensitive_text_files",
+            return_value=[malformed],
+        ), mock.patch("builtins.print") as output:
+            result = secret_artifact_gate.main()
+
+        self.assertEqual(result, 2)
+        rendered = "\n".join(
+            str(argument)
+            for call in output.call_args_list
+            for argument in call.args
+        )
+        self.assertIn("selected scope could not be safely scanned", rendered)
+        self.assertNotIn("private/unsafe.pem", rendered)
 
 
 if __name__ == "__main__":

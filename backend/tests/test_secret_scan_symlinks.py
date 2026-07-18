@@ -32,7 +32,7 @@ class SecretScanSymlinkTests(unittest.TestCase):
             tracked_link = checkout / "settings.env"
             self.create_symlink(external, tracked_link)
 
-            with self.assertRaisesRegex(RuntimeError, "symbolic link"):
+            with self.assertRaisesRegex(RuntimeError, "safely read"):
                 scanner_module.scan_tracked_files([tracked_link])
 
     def test_dangling_candidate_symlink_fails_closed(self) -> None:
@@ -41,10 +41,10 @@ class SecretScanSymlinkTests(unittest.TestCase):
             tracked_link = root / "settings.env"
             self.create_symlink(root / "missing.env", tracked_link)
 
-            with self.assertRaisesRegex(RuntimeError, "symbolic link"):
+            with self.assertRaisesRegex(RuntimeError, "safely read"):
                 scanner_module.scan_tracked_files([tracked_link])
 
-    def test_regular_file_swapped_to_symlink_before_read_fails_closed(self) -> None:
+    def test_regular_file_swapped_to_symlink_during_open_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tracked = root / "settings.env"
@@ -54,15 +54,18 @@ class SecretScanSymlinkTests(unittest.TestCase):
                 "ADMIN_PASSWORD=synthetic-race-secret", encoding="utf-8"
             )
 
-            original_read_bytes = Path.read_bytes
+            real_open = os.open
+            swapped = False
 
-            def swap_then_read(path: Path) -> bytes:
-                if path == tracked:
-                    path.unlink()
-                    self.create_symlink(external, path)
-                return original_read_bytes(path)
+            def swap_then_open(path, flags, *args, **kwargs):
+                nonlocal swapped
+                if Path(path) == tracked and not swapped:
+                    swapped = True
+                    tracked.unlink()
+                    self.create_symlink(external, tracked)
+                return real_open(path, flags, *args, **kwargs)
 
-            with patch.object(Path, "read_bytes", swap_then_read):
+            with patch.object(os, "open", swap_then_open):
                 with self.assertRaisesRegex(RuntimeError, "safely read"):
                     scanner_module.scan_tracked_files([tracked])
 

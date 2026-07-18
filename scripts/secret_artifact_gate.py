@@ -4,7 +4,7 @@
 The main secret scanner intentionally limits ordinary text scanning to known source and
 configuration suffixes. This companion gate closes the resulting blind spot for common
 credential containers, extensionless private keys, authentication dotfiles and sensitive
-text formats without printing file contents or credential values.
+text formats without printing file contents, credential values or repository paths.
 """
 
 from __future__ import annotations
@@ -90,6 +90,21 @@ def scan_sensitive_text_files(paths: Iterable[Path]) -> list[Any]:
     return findings
 
 
+def format_finding(finding: Any) -> str:
+    """Render one finding without disclosing repository-controlled path text.
+
+    Sensitive artifact filenames may themselves contain credential material or personal
+    identifiers. Reuse the controlled scanner's deterministic path fingerprint and retain
+    only the line, rule and constant redaction marker needed to reproduce the finding in a
+    controlled checkout.
+    """
+
+    return (
+        f"path-sha256={secret_scan_entry.path_fingerprint(finding.path)}:"
+        f"{finding.line}: {finding.rule}: <redacted>"
+    )
+
+
 def main() -> int:
     try:
         # Validate the complete Git path snapshot before importing scanner code. This
@@ -106,7 +121,9 @@ def main() -> int:
             return 1
         secret_scan = _load_scanner()
         findings = secret_scan.deduplicate(scan_sensitive_text_files(text_files))
-    except RuntimeError:
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        # Finding objects and scanner output are security evidence. Unexpected object
+        # shapes must fail closed rather than interpolating attacker-controlled values.
         print(
             "SECRET ARTIFACT GATE ERROR: selected scope could not be safely scanned",
             file=sys.stderr,
@@ -118,10 +135,16 @@ def main() -> int:
             "SECRET ARTIFACT GATE FAILED: possible credentials detected in a sensitive "
             "text artifact (values redacted)."
         )
-        for finding in findings:
+        try:
+            rendered_findings = [format_finding(finding) for finding in findings]
+        except (AttributeError, TypeError, ValueError):
             print(
-                f"{finding.path}:{finding.line}: {finding.rule}: {finding.redacted}"
+                "SECRET ARTIFACT GATE ERROR: selected scope could not be safely scanned",
+                file=sys.stderr,
             )
+            return 2
+        for rendered in rendered_findings:
+            print(rendered)
         return 1
 
     print("SECRET ARTIFACT GATE PASSED: no prohibited credential artifacts found.")

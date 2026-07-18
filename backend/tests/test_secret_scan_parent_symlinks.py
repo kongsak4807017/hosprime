@@ -38,6 +38,12 @@ class SecretScanParentSymlinkTests(unittest.TestCase):
         except (OSError, NotImplementedError) as exc:
             self.skipTest(f"directory symbolic links are unavailable: {exc}")
 
+    def create_hard_link(self, target: Path, link: Path) -> None:
+        try:
+            os.link(target, link)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"hard links are unavailable: {exc}")
+
     def test_parent_replaced_before_component_open_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -98,6 +104,44 @@ class SecretScanParentSymlinkTests(unittest.TestCase):
 
             self.assertEqual(data, b"SAFE=value")
             self.assertNotIn(b"synthetic-external-value", data)
+
+    def test_hard_link_to_external_inode_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / "checkout" / "managed"
+            checkout.mkdir(parents=True)
+            external = root / "external.env"
+            external.write_text(
+                "ADMIN_PASSWORD=synthetic-external-hard-link", encoding="utf-8"
+            )
+            tracked = checkout / "settings.env"
+            self.create_hard_link(external, tracked)
+
+            self.assertGreater(os.stat(tracked).st_nlink, 1)
+            with self.assertRaisesRegex(RuntimeError, "safely read"):
+                scanner.read_regular_file_safely(tracked)
+
+    def test_link_count_change_during_read_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tracked = Path(directory) / "checkout" / "managed" / "settings.env"
+            tracked.parent.mkdir(parents=True)
+            tracked.write_text("SAFE=value", encoding="utf-8")
+            alias = Path(directory) / "late-alias.env"
+
+            real_read = os.read
+            linked = False
+
+            def add_hard_link_after_first_read(descriptor, size):
+                nonlocal linked
+                chunk = real_read(descriptor, size)
+                if chunk and not linked:
+                    linked = True
+                    self.create_hard_link(tracked, alias)
+                return chunk
+
+            with patch.object(os, "read", add_hard_link_after_first_read):
+                with self.assertRaisesRegex(RuntimeError, "safely read"):
+                    scanner.read_regular_file_safely(tracked)
 
     def test_in_place_rewrite_during_read_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

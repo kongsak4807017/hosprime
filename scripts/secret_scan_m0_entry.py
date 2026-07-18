@@ -52,6 +52,15 @@ def install_modern_rules() -> None:
     secret_scan.HIGH_CONFIDENCE_RULES += additions
 
 
+def install_secure_reader() -> None:
+    """Install parent-component-pinned reads after tracked-path validation."""
+
+    import secret_scan
+    import secret_scan_secure_io
+
+    secret_scan_secure_io.install_component_pinned_reader(secret_scan)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         validated_paths = secret_scan_entry.validate_tracked_paths()
@@ -64,6 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     import secret_scan
 
     install_modern_rules()
+    install_secure_reader()
     secret_scan.tracked_paths = lambda: [Path(path) for path in validated_paths]
 
     effective_argv = list(sys.argv[1:] if argv is None else argv)

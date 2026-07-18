@@ -20,7 +20,7 @@ GENERIC_READ_ERROR = "tracked text path could not be safely read"
 INSTALL_MARKER = "_hosprime_component_pinned_reader_installed"
 
 
-def _supports_component_pinning() -> bool:
+def _detect_component_pinning_support() -> bool:
     return (
         hasattr(os, "O_DIRECTORY")
         and hasattr(os, "O_NOFOLLOW")
@@ -28,6 +28,15 @@ def _supports_component_pinning() -> bool:
         and os.stat in getattr(os, "supports_dir_fd", set())
         and os.stat in getattr(os, "supports_follow_symlinks", set())
     )
+
+
+# Detect once at import time. Tests and security instrumentation may intercept
+# ``os.open`` later; that must not silently downgrade the hardened reader.
+COMPONENT_PINNING_SUPPORTED = _detect_component_pinning_support()
+
+
+def _supports_component_pinning() -> bool:
+    return COMPONENT_PINNING_SUPPORTED
 
 
 def _directory_flags() -> int:
@@ -134,7 +143,7 @@ def install_component_pinned_reader(secret_scan: Any) -> None:
         path: Path,
         max_bytes: int = secret_scan.MAX_FILE_BYTES,
     ) -> bytes:
-        if not _supports_component_pinning():
+        if not COMPONENT_PINNING_SUPPORTED:
             return original_reader(path, max_bytes)
         try:
             descriptor, opened = _open_component_pinned(Path(path))

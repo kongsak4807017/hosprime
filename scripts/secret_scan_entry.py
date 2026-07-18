@@ -20,6 +20,17 @@ from typing import Callable, Sequence
 
 UNSAFE_UNICODE_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
 GENERIC_SCAN_ERROR = "SECRET SCAN ERROR: selected scope could not be safely scanned"
+WINDOWS_RESERVED_DEVICE_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "CONIN$",
+    "CONOUT$",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+}
+WINDOWS_FORBIDDEN_FILENAME_CHARACTERS = frozenset('<>:"|?*')
 
 
 def run_git_ls_files() -> bytes:
@@ -38,14 +49,40 @@ def run_git_ls_files() -> bytes:
     return completed.stdout
 
 
+def windows_path_is_checkout_unsafe(path: str) -> bool:
+    """Reject Git paths that cannot round-trip safely through Windows checkout.
+
+    Linux permits names that Windows interprets as device files, alternate data
+    streams, wildcard syntax, or lossy trailing-dot / trailing-space names. Reject
+    those names before importing scanner code so Linux CI evidence remains valid for
+    every supported M0 checkout platform.
+    """
+
+    windows_path = PureWindowsPath(path)
+    for part in windows_path.parts:
+        if part in {windows_path.anchor, ".", ".."}:
+            continue
+        if part.rstrip(" .") != part:
+            return True
+        if any(
+            character in WINDOWS_FORBIDDEN_FILENAME_CHARACTERS
+            for character in part
+        ):
+            return True
+        device_candidate = part.split(".", 1)[0].upper()
+        if device_candidate in WINDOWS_RESERVED_DEVICE_NAMES:
+            return True
+    return False
+
+
 def path_crosses_repository_boundary(path: str) -> bool:
     """Reject paths unsafe on either POSIX or Windows checkout semantics.
 
     Git stores path bytes independently of the runner operating system. A path such as
     ``..\\outside.env`` is an ordinary filename on POSIX but parent traversal on
     Windows, while drive-relative and root-relative Windows paths can resolve outside
-    the checkout. Validate both path grammars so evidence produced on Linux remains a
-    valid security boundary for every supported M0 platform.
+    the checkout. Validate both path grammars and Windows filename rules so evidence
+    produced on Linux remains a valid security boundary for every supported M0 platform.
     """
 
     posix_path = PurePosixPath(path)
@@ -56,6 +93,7 @@ def path_crosses_repository_boundary(path: str) -> bool:
         or windows_path.drive
         or ".." in posix_path.parts
         or ".." in windows_path.parts
+        or windows_path_is_checkout_unsafe(path)
     )
 
 

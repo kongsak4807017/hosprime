@@ -22,6 +22,16 @@ MODERN_HIGH_CONFIDENCE_RULE_SPECS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"\bgithub_pat_[A-Za-z0-9_]{50,}\b"),
     ),
     (
+        "gitlab-token",
+        re.compile(
+            r"\b(?:glpat|gloas|gldt|glrt|glrtr|glcbt|glptt|glft|glimt|glagent|glwt|glsoat|glffct)-[A-Za-z0-9_-]{20,}\b"
+        ),
+    ),
+    (
+        "stripe-live-secret-key",
+        re.compile(r"\bsk_live_[A-Za-z0-9]{24,}\b"),
+    ),
+    (
         "encrypted-private-key",
         re.compile(r"-----BEGIN ENCRYPTED PRIVATE KEY-----"),
     ),

@@ -174,6 +174,42 @@ class SecretScanParentSymlinkTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "safely read"):
                 secure_io._read_from_descriptor(descriptor, opened, -1, 1)
 
+    def test_working_directory_change_cannot_redirect_relative_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / "checkout"
+            external = root / "external"
+            (checkout / "managed").mkdir(parents=True)
+            (external / "managed").mkdir(parents=True)
+            (checkout / "managed" / "settings.env").write_text(
+                "SAFE=value", encoding="utf-8"
+            )
+            (external / "managed" / "settings.env").write_text(
+                "ADMIN_PASSWORD=synthetic-cwd-redirection", encoding="utf-8"
+            )
+
+            isolated_scanner = load_module(
+                "hosprime_cwd_pinned_scanner", "secret_scan.py"
+            )
+            previous = Path.cwd()
+            pinned_root_fd = None
+            try:
+                os.chdir(checkout)
+                secure_io.install_component_pinned_reader(isolated_scanner)
+                pinned_root_fd = getattr(isolated_scanner, secure_io.ROOT_FD_MARKER)
+                os.chdir(external)
+
+                data = isolated_scanner.read_regular_file_safely(
+                    Path("managed/settings.env")
+                )
+            finally:
+                os.chdir(previous)
+                if isinstance(pinned_root_fd, int):
+                    os.close(pinned_root_fd)
+
+            self.assertEqual(data, b"SAFE=value")
+            self.assertNotIn(b"synthetic-cwd-redirection", data)
+
     def test_nested_regular_file_remains_scannable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tracked = Path(directory) / "checkout" / "managed" / "settings.env"

@@ -39,6 +39,42 @@ class SecretScanEntryErrorRedactionTests(unittest.TestCase):
         self.assertNotIn(sensitive_detail, output)
         self.assertNotIn("synthetic-secret-marker", output)
 
+    def test_unexpected_exception_is_contained_without_traceback_detail(self) -> None:
+        sensitive_detail = "synthetic-secret-marker-from-exception"
+
+        def raising_scanner(_argv):
+            print("partial repository-controlled output")
+            raise RuntimeError(sensitive_detail)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = entry_module.run_scanner_safely(raising_scanner)
+
+        self.assertEqual(result, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue().strip(), entry_module.GENERIC_SCAN_ERROR)
+        self.assertNotIn(sensitive_detail, stderr.getvalue())
+        self.assertNotIn("partial repository-controlled output", stdout.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_system_exit_is_contained_without_argparse_output(self) -> None:
+        sensitive_detail = "synthetic-secret-marker-from-argparse"
+
+        def exiting_scanner(_argv):
+            print(sensitive_detail, file=sys.stderr)
+            raise SystemExit(2)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = entry_module.run_scanner_safely(exiting_scanner)
+
+        self.assertEqual(result, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue().strip(), entry_module.GENERIC_SCAN_ERROR)
+        self.assertNotIn(sensitive_detail, stderr.getvalue())
+
     def test_validated_path_failure_uses_same_generic_error(self) -> None:
         stderr = io.StringIO()
         with patch.object(

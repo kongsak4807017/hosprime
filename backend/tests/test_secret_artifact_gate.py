@@ -46,6 +46,26 @@ class SecretArtifactGateTests(unittest.TestCase):
         )
         self.assertEqual(forbidden, [])
 
+    def test_path_validation_failure_prevents_scanner_loading(self) -> None:
+        unsafe_detail = "unsafe-path-with-sensitive-marker"
+        with mock.patch.object(
+            secret_artifact_gate.secret_scan_entry,
+            "validate_tracked_paths",
+            side_effect=RuntimeError(unsafe_detail),
+        ):
+            with mock.patch.object(secret_artifact_gate, "_load_scanner") as loader:
+                with mock.patch("builtins.print") as output:
+                    result = secret_artifact_gate.main()
+        self.assertEqual(result, 2)
+        loader.assert_not_called()
+        rendered = " ".join(
+            str(argument)
+            for call in output.call_args_list
+            for argument in call.args
+        )
+        self.assertIn("selected scope could not be safely scanned", rendered)
+        self.assertNotIn(unsafe_detail, rendered)
+
     def test_binary_credential_stores_are_rejected_without_path_disclosure(self) -> None:
         with mock.patch.object(
             secret_artifact_gate.secret_scan_entry,
@@ -79,6 +99,23 @@ class SecretArtifactGateTests(unittest.TestCase):
                 os.chdir(previous)
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].rule, "private-key")
+        self.assertEqual(findings[0].redacted, "<redacted>")
+
+    def test_encrypted_pkcs8_key_is_detected_by_artifact_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                path = Path("encrypted-service.pem")
+                path.write_text(
+                    "-----BEGIN ENCRYPTED PRIVATE KEY-----\nsynthetic-fixture\n",
+                    encoding="utf-8",
+                )
+                findings = secret_artifact_gate.scan_sensitive_text_files([path])
+            finally:
+                os.chdir(previous)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "encrypted-private-key")
         self.assertEqual(findings[0].redacted, "<redacted>")
 
     def test_extensionless_private_key_is_detected_with_constant_redaction(self) -> None:

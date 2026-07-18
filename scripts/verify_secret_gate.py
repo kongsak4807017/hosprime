@@ -24,11 +24,20 @@ EXACT_GIT_RANGE_RE = re.compile(
 )
 
 
+def exact_commits_from_range(git_range: str) -> tuple[str, str] | None:
+    """Return normalized base/head SHAs or reject a non-exact range."""
+
+    match = EXACT_GIT_RANGE_RE.fullmatch(git_range)
+    if match is None:
+        return None
+    return match.group("base").lower(), match.group("head").lower()
+
+
 def expected_head_from_range(git_range: str) -> str | None:
     """Return the normalized exact head SHA or reject a non-exact range."""
 
-    match = EXACT_GIT_RANGE_RE.fullmatch(git_range)
-    return match.group("head").lower() if match else None
+    commits = exact_commits_from_range(git_range)
+    return commits[1] if commits is not None else None
 
 
 def _run_git_probe(arguments: Sequence[str]) -> subprocess.CompletedProcess[str] | None:
@@ -46,6 +55,18 @@ def _run_git_probe(arguments: Sequence[str]) -> subprocess.CompletedProcess[str]
         return None
 
 
+def _git_probe_succeeded(arguments: Sequence[str]) -> bool:
+    """Require a silent successful Git probe without forwarding repository output."""
+
+    completed = _run_git_probe(arguments)
+    return (
+        completed is not None
+        and completed.returncode == 0
+        and completed.stdout == ""
+        and completed.stderr == ""
+    )
+
+
 def checkout_matches_expected_head(expected_head: str) -> bool:
     """Verify that the current checkout is the exact range head without leaking Git output."""
 
@@ -55,6 +76,23 @@ def checkout_matches_expected_head(expected_head: str) -> bool:
         and completed.returncode == 0
         and completed.stdout.strip().lower() == expected_head
         and not completed.stderr
+    )
+
+
+def exact_range_is_valid(base_sha: str, head_sha: str) -> bool:
+    """Require real commit objects and a base that is an ancestor of the exact head.
+
+    Merely accepting two 40-hex values is insufficient for an accountable receipt:
+    a missing object, unrelated commit, or reversed range can change the meaning of
+    an added-diff scan. All probes are captured and must complete silently.
+    """
+
+    return (
+        _git_probe_succeeded(["cat-file", "-e", f"{base_sha}^{{commit}}"])
+        and _git_probe_succeeded(["cat-file", "-e", f"{head_sha}^{{commit}}"])
+        and _git_probe_succeeded(
+            ["merge-base", "--is-ancestor", base_sha, head_sha]
+        )
     )
 
 
@@ -138,8 +176,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.git_range is not None:
-        expected_head = expected_head_from_range(args.git_range)
-        if expected_head is None or not checkout_matches_expected_head(expected_head):
+        commits = exact_commits_from_range(args.git_range)
+        if commits is None:
+            print(GENERIC_FAILURE, file=sys.stderr)
+            return 2
+        base_sha, expected_head = commits
+        if (
+            not checkout_matches_expected_head(expected_head)
+            or not exact_range_is_valid(base_sha, expected_head)
+        ):
             print(GENERIC_FAILURE, file=sys.stderr)
             return 2
     if not checkout_is_pristine():

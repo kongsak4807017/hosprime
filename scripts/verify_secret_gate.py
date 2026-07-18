@@ -31,20 +31,50 @@ def expected_head_from_range(git_range: str) -> str | None:
     return match.group("head").lower() if match else None
 
 
-def checkout_matches_expected_head(expected_head: str) -> bool:
-    """Verify that the current checkout is the exact range head without leaking Git output."""
+def _run_git_probe(arguments: Sequence[str]) -> subprocess.CompletedProcess[str] | None:
+    """Run a non-disclosing Git probe from the repository root."""
 
     try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "--verify", "HEAD"],
+        return subprocess.run(
+            ["git", *arguments],
             cwd=ROOT,
             check=False,
             capture_output=True,
             text=True,
         )
     except OSError:
-        return False
-    return completed.returncode == 0 and completed.stdout.strip().lower() == expected_head
+        return None
+
+
+def checkout_matches_expected_head(expected_head: str) -> bool:
+    """Verify that the current checkout is the exact range head without leaking Git output."""
+
+    completed = _run_git_probe(["rev-parse", "--verify", "HEAD"])
+    return (
+        completed is not None
+        and completed.returncode == 0
+        and completed.stdout.strip().lower() == expected_head
+        and not completed.stderr
+    )
+
+
+def checkout_is_pristine() -> bool:
+    """Require the receipt to execute only committed files from the selected checkout.
+
+    Tracked modifications, staged changes and untracked files can change imported
+    Python modules, test discovery or scanner inputs without changing ``HEAD``.
+    Ignored runtime files remain excluded by Git's normal status semantics.
+    """
+
+    completed = _run_git_probe(
+        ["status", "--porcelain=v1", "--untracked-files=all"]
+    )
+    return (
+        completed is not None
+        and completed.returncode == 0
+        and completed.stdout == ""
+        and completed.stderr == ""
+    )
 
 
 def build_commands(git_range: str | None) -> list[list[str]]:
@@ -112,6 +142,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if expected_head is None or not checkout_matches_expected_head(expected_head):
             print(GENERIC_FAILURE, file=sys.stderr)
             return 2
+    if not checkout_is_pristine():
+        print(GENERIC_FAILURE, file=sys.stderr)
+        return 2
     return run_commands(build_commands(args.git_range))
 
 

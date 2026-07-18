@@ -10,11 +10,12 @@ tracked-tree gate succeeds.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERIC_FAILURE = "SECRET GATE ERROR: verification did not complete successfully"
@@ -40,17 +41,46 @@ def expected_head_from_range(git_range: str) -> str | None:
     return commits[1] if commits is not None else None
 
 
+def sanitized_git_environment(
+    source: Mapping[str, str] | None = None,
+) -> dict[str, str] | None:
+    """Return an environment that cannot redirect local provenance probes.
+
+    Git repository-selection and object-store variables such as ``GIT_DIR``,
+    ``GIT_WORK_TREE`` and ``GIT_OBJECT_DIRECTORY`` override ``cwd`` and can make
+    HEAD/status/ancestry probes describe a different repository from the files
+    that the security commands execute. Configuration-injection variables can
+    also alter local Git behavior. The receipt probes require none of these
+    variables, so every inherited ``GIT_*`` key is removed.
+
+    ``None`` is returned when no sanitization is required so ordinary subprocess
+    call signatures remain stable and the child inherits the normal environment.
+    """
+
+    inherited = os.environ if source is None else source
+    if not any(key.upper().startswith("GIT_") for key in inherited):
+        return None
+    return {
+        key: value
+        for key, value in inherited.items()
+        if not key.upper().startswith("GIT_")
+    }
+
+
 def _run_git_probe(arguments: Sequence[str]) -> subprocess.CompletedProcess[str] | None:
     """Run a non-disclosing Git probe from the repository root."""
 
+    kwargs: dict[str, object] = {
+        "cwd": ROOT,
+        "check": False,
+        "capture_output": True,
+        "text": True,
+    }
+    environment = sanitized_git_environment()
+    if environment is not None:
+        kwargs["env"] = environment
     try:
-        return subprocess.run(
-            ["git", *arguments],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        return subprocess.run(["git", *arguments], **kwargs)
     except OSError:
         return None
 

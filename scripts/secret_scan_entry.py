@@ -14,7 +14,7 @@ import subprocess
 import sys
 import unicodedata
 from contextlib import redirect_stderr
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Sequence
 
 
@@ -36,6 +36,27 @@ def run_git_ls_files() -> bytes:
             f"git ls-files -z failed with exit status {completed.returncode}"
         )
     return completed.stdout
+
+
+def path_crosses_repository_boundary(path: str) -> bool:
+    """Reject paths unsafe on either POSIX or Windows checkout semantics.
+
+    Git stores path bytes independently of the runner operating system. A path such as
+    ``..\\outside.env`` is an ordinary filename on POSIX but parent traversal on
+    Windows, while drive-relative and root-relative Windows paths can resolve outside
+    the checkout. Validate both path grammars so evidence produced on Linux remains a
+    valid security boundary for every supported M0 platform.
+    """
+
+    posix_path = PurePosixPath(path)
+    windows_path = PureWindowsPath(path)
+    return bool(
+        posix_path.anchor
+        or windows_path.anchor
+        or windows_path.drive
+        or ".." in posix_path.parts
+        or ".." in windows_path.parts
+    )
 
 
 def validate_tracked_path_bytes(raw: bytes) -> list[str]:
@@ -65,8 +86,7 @@ def validate_tracked_path_bytes(raw: bytes) -> list[str]:
                 "Git index contains a tracked path with unsafe control or format characters"
             )
 
-        candidate = Path(path)
-        if candidate.is_absolute() or ".." in candidate.parts:
+        if path_crosses_repository_boundary(path):
             raise RuntimeError(
                 "Git index contains a tracked path outside the repository boundary"
             )

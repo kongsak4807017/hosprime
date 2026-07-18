@@ -74,12 +74,41 @@ class SecretScanGitPathTests(unittest.TestCase):
                     )
                 self.assertNotIn("outside.env", str(context.exception))
 
+    def test_windows_unsafe_checkout_names_fail_closed(self) -> None:
+        unsafe_paths = (
+            "CON",
+            "docs/prn.txt",
+            "vault/AUX.md",
+            "data/NUL.json",
+            "logs/COM1.txt",
+            "logs/lpt9.log",
+            "safe/file.txt.",
+            "safe/file.txt ",
+            "safe/secret.env:payload",
+            "safe/quo?te.env",
+            "safe/star*.env",
+            "safe/pipe|name.env",
+            'safe/quote"name.env',
+            "safe/less<name.env",
+            "safe/more>name.env",
+            "safe/CONIN$.txt",
+        )
+        for unsafe_path in unsafe_paths:
+            with self.subTest(path_kind=unsafe_path):
+                with self.assertRaisesRegex(
+                    RuntimeError, "outside the repository boundary"
+                ) as context:
+                    entry_module.validate_tracked_path_bytes(
+                        unsafe_path.encode("utf-8") + b"\0"
+                    )
+                self.assertNotIn(unsafe_path, str(context.exception))
+
     def test_valid_utf8_repository_paths_are_returned(self) -> None:
         self.assertEqual(
             entry_module.validate_tracked_path_bytes(
-                "settings.env\0docs/คู่มือ.md\0".encode("utf-8")
+                "settings.env\0docs/คู่มือ.md\0vault/decision-01.md\0".encode("utf-8")
             ),
-            ["settings.env", "docs/คู่มือ.md"],
+            ["settings.env", "docs/คู่มือ.md", "vault/decision-01.md"],
         )
 
     def test_git_failure_does_not_echo_untrusted_stderr(self) -> None:

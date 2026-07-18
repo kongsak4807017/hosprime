@@ -103,6 +103,22 @@ class SecretScanGitPathTests(unittest.TestCase):
                     )
                 self.assertNotIn(unsafe_path, str(context.exception))
 
+    def test_cross_platform_checkout_collisions_fail_closed(self) -> None:
+        collision_sets = (
+            ("Config/Secrets.env", "config/secrets.env"),
+            ("docs/caf\u00e9.md", "docs/cafe\u0301.md"),
+            ("vault/person/profile.md", "vault\\person\\profile.md"),
+        )
+        for paths in collision_sets:
+            with self.subTest(collision_kind=paths[0]):
+                raw = ("\0".join(paths) + "\0").encode("utf-8")
+                with self.assertRaisesRegex(
+                    RuntimeError, "colliding checkout identities"
+                ) as context:
+                    entry_module.validate_tracked_path_bytes(raw)
+                for path in paths:
+                    self.assertNotIn(path, str(context.exception))
+
     def test_valid_utf8_repository_paths_are_returned(self) -> None:
         self.assertEqual(
             entry_module.validate_tracked_path_bytes(

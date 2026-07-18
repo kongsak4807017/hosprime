@@ -9,6 +9,7 @@ text formats without printing file contents, credential values or repository pat
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -48,6 +49,7 @@ FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
     ".p12",
     ".pfx",
 }
+FINDING_RULE_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def _load_scanner() -> Any:
@@ -91,17 +93,24 @@ def scan_sensitive_text_files(paths: Iterable[Path]) -> list[Any]:
 
 
 def format_finding(finding: Any) -> str:
-    """Render one finding without disclosing repository-controlled path text.
+    """Render one finding through a closed, non-disclosing evidence contract."""
 
-    Sensitive artifact filenames may themselves contain credential material or personal
-    identifiers. Reuse the controlled scanner's deterministic path fingerprint and retain
-    only the line, rule and constant redaction marker needed to reproduce the finding in a
-    controlled checkout.
-    """
+    path = finding.path
+    line = finding.line
+    rule = finding.rule
+    redacted = finding.redacted
+    if not isinstance(path, str) or not path:
+        raise ValueError("finding path did not match the controlled contract")
+    if type(line) is not int or line < 1:
+        raise ValueError("finding line did not match the controlled contract")
+    if not isinstance(rule, str) or FINDING_RULE_RE.fullmatch(rule) is None:
+        raise ValueError("finding rule did not match the controlled contract")
+    if redacted != "<redacted>":
+        raise ValueError("finding redaction did not match the controlled contract")
 
     return (
-        f"path-sha256={secret_scan_entry.path_fingerprint(finding.path)}:"
-        f"{finding.line}: {finding.rule}: <redacted>"
+        f"path-sha256={secret_scan_entry.path_fingerprint(path)}:"
+        f"{line}: {rule}: <redacted>"
     )
 
 
@@ -122,8 +131,6 @@ def main() -> int:
         secret_scan = _load_scanner()
         findings = secret_scan.deduplicate(scan_sensitive_text_files(text_files))
     except (AttributeError, RuntimeError, TypeError, ValueError):
-        # Finding objects and scanner output are security evidence. Unexpected object
-        # shapes must fail closed rather than interpolating attacker-controlled values.
         print(
             "SECRET ARTIFACT GATE ERROR: selected scope could not be safely scanned",
             file=sys.stderr,
@@ -131,10 +138,6 @@ def main() -> int:
         return 2
 
     if findings:
-        print(
-            "SECRET ARTIFACT GATE FAILED: possible credentials detected in a sensitive "
-            "text artifact (values redacted)."
-        )
         try:
             rendered_findings = [format_finding(finding) for finding in findings]
         except (AttributeError, TypeError, ValueError):
@@ -143,6 +146,10 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
+        print(
+            "SECRET ARTIFACT GATE FAILED: possible credentials detected in a sensitive "
+            "text artifact (values redacted)."
+        )
         for rendered in rendered_findings:
             print(rendered)
         return 1

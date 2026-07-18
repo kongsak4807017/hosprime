@@ -95,6 +95,14 @@ MAX_FILE_BYTES = 2_000_000
 
 
 def run_git(*args: str) -> bytes:
+    """Run Git without allowing untrusted command output into security evidence.
+
+    Git stderr can contain repository-controlled path text, configured helper output,
+    or credential-bearing values. The scanner therefore reports only the executable
+    name and numeric exit status. Callers retain the original exception as no public
+    evidence because subprocess output is intentionally withheld.
+    """
+
     completed = subprocess.run(
         ["git", *args],
         check=False,
@@ -102,8 +110,9 @@ def run_git(*args: str) -> bytes:
         stderr=subprocess.PIPE,
     )
     if completed.returncode != 0:
-        message = completed.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"git {' '.join(args)} failed: {message}")
+        raise RuntimeError(
+            f"git command failed with exit status {completed.returncode}"
+        )
     return completed.stdout
 
 

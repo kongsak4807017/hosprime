@@ -104,14 +104,15 @@ class VerifySecretGateTests(unittest.TestCase):
         emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
 
     @patch.object(verify_secret_gate.subprocess, "run")
-    def test_matching_exact_head_allows_gate(self, run) -> None:
+    def test_matching_exact_head_allows_gate_from_pristine_checkout(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
             [], 0, stdout=HEAD_SHA + "\n", stderr=""
         )
 
-        with patch.object(
-            verify_secret_gate, "run_commands", return_value=0
-        ) as run_commands:
+        with (
+            patch.object(verify_secret_gate, "checkout_is_pristine", return_value=True),
+            patch.object(verify_secret_gate, "run_commands", return_value=0) as run_commands,
+        ):
             status = verify_secret_gate.main(
                 ["--git-range", f"{BASE_SHA}...{HEAD_SHA}"]
             )
@@ -127,6 +128,60 @@ class VerifySecretGateTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
+    @patch.object(verify_secret_gate.subprocess, "run")
+    def test_pristine_checkout_requires_empty_porcelain_status(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+
+        self.assertTrue(verify_secret_gate.checkout_is_pristine())
+        run.assert_called_once_with(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_tracked_staged_and_untracked_changes_are_rejected(self) -> None:
+        dirty_outputs = (
+            " M scripts/verify_secret_gate.py\n",
+            "M  scripts/verify_secret_gate.py\n",
+            "?? injected_module.py\n",
+        )
+        for status_output in dirty_outputs:
+            with self.subTest(status_output=status_output):
+                completed = subprocess.CompletedProcess(
+                    [], 0, stdout=status_output, stderr=""
+                )
+                with patch.object(
+                    verify_secret_gate, "_run_git_probe", return_value=completed
+                ):
+                    self.assertFalse(verify_secret_gate.checkout_is_pristine())
+
+    def test_dirty_checkout_fails_before_any_security_gate(self) -> None:
+        with (
+            patch.object(verify_secret_gate, "checkout_is_pristine", return_value=False),
+            patch.object(verify_secret_gate, "run_commands") as run_commands,
+            patch("builtins.print") as emit,
+        ):
+            status = verify_secret_gate.main([])
+
+        self.assertEqual(status, 2)
+        run_commands.assert_not_called()
+        emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
+
+    def test_git_probe_error_or_stderr_fails_closed(self) -> None:
+        cases = (
+            None,
+            subprocess.CompletedProcess([], 1, stdout="", stderr="detail"),
+            subprocess.CompletedProcess([], 0, stdout="", stderr="detail"),
+        )
+        for completed in cases:
+            with self.subTest(completed=completed):
+                with patch.object(
+                    verify_secret_gate, "_run_git_probe", return_value=completed
+                ):
+                    self.assertFalse(verify_secret_gate.checkout_is_pristine())
 
 
 if __name__ == "__main__":

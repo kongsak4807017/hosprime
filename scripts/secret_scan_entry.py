@@ -9,17 +9,26 @@ uncontrolled traceback, forge evidence output, or evade the repository security 
 
 from __future__ import annotations
 
+import hashlib
 import io
+import re
 import subprocess
 import sys
 import unicodedata
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Callable, Sequence
 
 
 UNSAFE_UNICODE_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
 GENERIC_SCAN_ERROR = "SECRET SCAN ERROR: selected scope could not be safely scanned"
+SCAN_FAILED_HEADER = "SECRET SCAN FAILED: possible credentials detected (values redacted)."
+SCAN_FAILED_FOOTER = (
+    "Remove the value from Git and rotate/revoke it through the accountable owner."
+)
+FINDING_LINE_RE = re.compile(
+    r"^(?P<path>.+):(?P<line>[0-9]+): (?P<rule>[a-z0-9-]+): <redacted>$"
+)
 WINDOWS_RESERVED_DEVICE_NAMES = {
     "CON",
     "PRN",
@@ -161,21 +170,67 @@ def validate_tracked_paths() -> list[str]:
     return validate_tracked_path_bytes(run_git_ls_files())
 
 
-def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> int:
-    """Run the scanner while withholding repository-controlled error details.
+def path_fingerprint(path: str) -> str:
+    """Return a stable non-reversible locator for repository-controlled path text."""
 
-    Findings remain observable on stdout and fully redacted by ``secret_scan``. For an
-    operational error (exit 2), however, the underlying scanner may include a tracked
-    path or operating-system exception in stderr. The controlled entrypoint suppresses
-    that untrusted detail and emits one stable, non-disclosing error message instead.
+    return hashlib.sha256(path.encode("utf-8")).hexdigest()[:16]
+
+
+def sanitize_failed_scan_stdout(output: str) -> str:
+    """Allow only the scanner's fixed failure envelope and redacted findings.
+
+    Credential values are already replaced with ``<redacted>`` by the core scanner,
+    but a repository-controlled filename can itself contain a credential. Replace every
+    path with a stable SHA-256 fingerprint before emitting findings to CI or terminal
+    evidence. Any unexpected output shape fails closed rather than echoing untrusted text.
     """
 
+    lines = output.splitlines()
+    if len(lines) < 3 or lines[0] != SCAN_FAILED_HEADER or lines[-1] != SCAN_FAILED_FOOTER:
+        raise RuntimeError("scanner failure output did not match the controlled contract")
+
+    sanitized = [SCAN_FAILED_HEADER]
+    for line in lines[1:-1]:
+        match = FINDING_LINE_RE.fullmatch(line)
+        if match is None:
+            raise RuntimeError("scanner finding output did not match the controlled contract")
+        sanitized.append(
+            "path-sha256="
+            f"{path_fingerprint(match.group('path'))}:"
+            f"{match.group('line')}: {match.group('rule')}: <redacted>"
+        )
+    sanitized.append(SCAN_FAILED_FOOTER)
+    return "\n".join(sanitized) + "\n"
+
+
+def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> int:
+    """Run the scanner while withholding repository-controlled output details.
+
+    Operational errors use one stable generic message. Credential findings retain the
+    rule and line number but replace repository-controlled paths with a deterministic
+    fingerprint, preventing credentials embedded in filenames from leaking into logs.
+    """
+
+    captured_stdout = io.StringIO()
     captured_stderr = io.StringIO()
-    with redirect_stderr(captured_stderr):
+    with redirect_stdout(captured_stdout), redirect_stderr(captured_stderr):
         result = scanner_main(None)
+
     if result == 2:
         print(GENERIC_SCAN_ERROR, file=sys.stderr)
-    elif captured_stderr.getvalue():
+        return result
+
+    if result == 1:
+        try:
+            sanitized = sanitize_failed_scan_stdout(captured_stdout.getvalue())
+        except RuntimeError:
+            print(GENERIC_SCAN_ERROR, file=sys.stderr)
+            return 2
+        print(sanitized, end="")
+    elif captured_stdout.getvalue():
+        print(captured_stdout.getvalue(), end="")
+
+    if captured_stderr.getvalue():
         # Preserve non-operational diagnostics such as argparse usage errors only when
         # the scanner did not classify the run as an unsafe-scope error.
         print(captured_stderr.getvalue(), end="", file=sys.stderr)

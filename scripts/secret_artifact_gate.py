@@ -51,12 +51,7 @@ FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
 
 
 def _load_scanner() -> Any:
-    """Load the scanner and current M0 rules after path validation.
-
-    Keeping this import lazy preserves the same validation-before-import boundary used by
-    the controlled full-tree entrypoint. Installing the M0 rules here also prevents the
-    sensitive-artifact gate from missing formats such as encrypted PKCS#8 private keys.
-    """
+    """Load the scanner and current M0 rules after path validation."""
 
     import secret_scan
     import secret_scan_m0_entry
@@ -82,22 +77,12 @@ def sensitive_paths(paths: Iterable[str]) -> tuple[list[Path], list[Path]]:
 
 
 def scan_sensitive_text_files(paths: Iterable[Path]) -> list[Any]:
-    """Scan sensitive text formats using the same fail-closed input controls."""
+    """Scan sensitive text formats through the shared race-resistant reader."""
 
     secret_scan = _load_scanner()
     findings: list[Any] = []
     for path in paths:
-        if path.is_symlink():
-            raise RuntimeError("tracked sensitive text artifact is a symbolic link")
-        if not path.is_file():
-            raise RuntimeError("tracked sensitive text artifact is not a regular file")
-        try:
-            size = path.stat().st_size
-            if size > secret_scan.MAX_FILE_BYTES:
-                raise RuntimeError("tracked sensitive text artifact exceeds scan limit")
-            data = path.read_bytes()
-        except OSError as exc:
-            raise RuntimeError("cannot read tracked sensitive text artifact") from exc
+        data = secret_scan.read_regular_file_safely(path)
         if b"\0" in data:
             raise RuntimeError("tracked sensitive text artifact contains NUL bytes")
         text = secret_scan.decode_utf8(data, "tracked sensitive text artifact")

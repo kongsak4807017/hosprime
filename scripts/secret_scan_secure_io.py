@@ -2,10 +2,10 @@
 """Race-resistant tracked-file reads for the M0 credential scanner.
 
 On platforms with ``openat``-style ``dir_fd`` support, every parent directory is
-opened with ``O_NOFOLLOW`` and retained as a descriptor while the next component
-is opened. This prevents a repository directory from being replaced by a symlink
-between path validation and file reading. Platforms without the required APIs
-retain the core scanner's final-component protection.
+opened relative to a pinned descriptor and its pre-open identity is compared with
+the opened descriptor. This prevents repository directories from being replaced or
+redirected between path validation and file reading. Platforms without the required
+APIs retain the core scanner's final-component protection.
 """
 
 from __future__ import annotations
@@ -57,8 +57,12 @@ def _file_flags() -> int:
     )
 
 
+def _same_identity(before: os.stat_result, opened: os.stat_result) -> bool:
+    return (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+
+
 def _open_component_pinned(path: Path) -> tuple[int, os.stat_result]:
-    """Open a regular file while pinning every traversed directory descriptor."""
+    """Open a regular file while pinning and verifying every path component."""
 
     candidate = Path(path)
     components = list(candidate.parts)
@@ -74,10 +78,20 @@ def _open_component_pinned(path: Path) -> tuple[int, os.stat_result]:
     directory_fd = os.open(anchor, _directory_flags())
     try:
         for component in components[:-1]:
+            before_directory = os.stat(
+                component,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+            if not stat.S_ISDIR(before_directory.st_mode):
+                raise RuntimeError(GENERIC_READ_ERROR)
+
             next_fd = os.open(component, _directory_flags(), dir_fd=directory_fd)
             try:
                 opened_directory = os.fstat(next_fd)
                 if not stat.S_ISDIR(opened_directory.st_mode):
+                    raise RuntimeError(GENERIC_READ_ERROR)
+                if not _same_identity(before_directory, opened_directory):
                     raise RuntimeError(GENERIC_READ_ERROR)
             except Exception:
                 os.close(next_fd)
@@ -95,7 +109,7 @@ def _open_component_pinned(path: Path) -> tuple[int, os.stat_result]:
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode):
                 raise RuntimeError(GENERIC_READ_ERROR)
-            if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            if not _same_identity(before, opened):
                 raise RuntimeError(GENERIC_READ_ERROR)
             return descriptor, opened
         except Exception:

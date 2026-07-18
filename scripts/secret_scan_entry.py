@@ -9,14 +9,17 @@ uncontrolled traceback, forge evidence output, or evade the repository security 
 
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 import unicodedata
+from contextlib import redirect_stderr
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 
 UNSAFE_UNICODE_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
+GENERIC_SCAN_ERROR = "SECRET SCAN ERROR: selected scope could not be safely scanned"
 
 
 def run_git_ls_files() -> bytes:
@@ -75,11 +78,32 @@ def validate_tracked_paths() -> list[str]:
     return validate_tracked_path_bytes(run_git_ls_files())
 
 
+def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> int:
+    """Run the scanner while withholding repository-controlled error details.
+
+    Findings remain observable on stdout and fully redacted by ``secret_scan``. For an
+    operational error (exit 2), however, the underlying scanner may include a tracked
+    path or operating-system exception in stderr. The controlled entrypoint suppresses
+    that untrusted detail and emits one stable, non-disclosing error message instead.
+    """
+
+    captured_stderr = io.StringIO()
+    with redirect_stderr(captured_stderr):
+        result = scanner_main(None)
+    if result == 2:
+        print(GENERIC_SCAN_ERROR, file=sys.stderr)
+    elif captured_stderr.getvalue():
+        # Preserve non-operational diagnostics such as argparse usage errors only when
+        # the scanner did not classify the run as an unsafe-scope error.
+        print(captured_stderr.getvalue(), end="", file=sys.stderr)
+    return result
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         validated_paths = validate_tracked_paths()
-    except RuntimeError as exc:
-        print(f"SECRET SCAN ERROR: {exc}", file=sys.stderr)
+    except RuntimeError:
+        print(GENERIC_SCAN_ERROR, file=sys.stderr)
         return 2
 
     # Import only after validation, then pin the scanner to the exact validated path
@@ -98,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     original_argv = sys.argv
     try:
         sys.argv = [original_argv[0], *effective_argv]
-        return secret_scan.main(None)
+        return run_scanner_safely(secret_scan.main)
     finally:
         sys.argv = original_argv
 

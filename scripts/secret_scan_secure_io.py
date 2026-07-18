@@ -61,6 +61,19 @@ def _same_identity(before: os.stat_result, opened: os.stat_result) -> bool:
     return (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
 
 
+def _snapshot_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    """Return fields that must remain stable for one trustworthy file read."""
+
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_size,
+        getattr(metadata, "st_mtime_ns", int(metadata.st_mtime * 1_000_000_000)),
+        getattr(metadata, "st_ctime_ns", int(metadata.st_ctime * 1_000_000_000)),
+    )
+
+
 def _open_component_pinned(path: Path) -> tuple[int, os.stat_result]:
     """Open a regular file while pinning and verifying every path component."""
 
@@ -126,14 +139,18 @@ def _read_from_descriptor(
     chunk_bytes: int,
 ) -> bytes:
     try:
-        if opened.st_size > max_bytes:
+        if max_bytes < 0 or chunk_bytes <= 0 or opened.st_size > max_bytes:
             raise RuntimeError(GENERIC_READ_ERROR)
 
+        initial_snapshot = _snapshot_identity(opened)
         chunks: list[bytes] = []
         total = 0
         while True:
             chunk = os.read(descriptor, min(chunk_bytes, max_bytes + 1 - total))
             if not chunk:
+                final_metadata = os.fstat(descriptor)
+                if _snapshot_identity(final_metadata) != initial_snapshot:
+                    raise RuntimeError(GENERIC_READ_ERROR)
                 return b"".join(chunks)
             chunks.append(chunk)
             total += len(chunk)

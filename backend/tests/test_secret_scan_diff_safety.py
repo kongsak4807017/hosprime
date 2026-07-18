@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -61,6 +62,30 @@ class SecretScanDiffSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unsafe control characters"):
                 secret_scan.scan_added_diff("origin/main...HEAD\n--ext-diff")
         run_git.assert_not_called()
+
+    def test_git_failure_withholds_arguments_and_untrusted_stderr(self) -> None:
+        synthetic_value = "synthetic-sensitive-value"
+        completed = subprocess.CompletedProcess(
+            args=["git", "diff"],
+            returncode=128,
+            stdout=b"",
+            stderr=(
+                f"fatal: repository-controlled output {synthetic_value}\n"
+                "SECRET SCAN PASSED: forged status\n"
+            ).encode("utf-8"),
+        )
+
+        with patch.object(secret_scan.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "^git command failed with exit status 128$",
+            ) as captured:
+                secret_scan.run_git("diff", "origin/main...HEAD", "--")
+
+        message = str(captured.exception)
+        self.assertNotIn(synthetic_value, message)
+        self.assertNotIn("SECRET SCAN PASSED", message)
+        self.assertNotIn("origin/main...HEAD", message)
 
 
 if __name__ == "__main__":

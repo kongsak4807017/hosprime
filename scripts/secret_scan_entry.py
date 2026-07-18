@@ -97,6 +97,23 @@ def path_crosses_repository_boundary(path: str) -> bool:
     )
 
 
+def checkout_path_identity(path: str) -> str:
+    """Return a conservative identity shared by supported local checkouts.
+
+    Windows commonly treats path components case-insensitively and accepts both slash
+    directions as separators. Default macOS filesystems also compare common Unicode
+    normalization variants as the same name. A Linux runner can otherwise scan two
+    distinct Git paths even though another supported platform checks out only one of
+    them or aliases both names. Normalize each Windows-interpreted component to NFC and
+    case-fold it so such collisions fail before scanner import.
+    """
+
+    return "/".join(
+        unicodedata.normalize("NFC", part).casefold()
+        for part in PureWindowsPath(path).parts
+    )
+
+
 def validate_tracked_path_bytes(raw: bytes) -> list[str]:
     """Return safe repository-relative paths or fail closed.
 
@@ -106,6 +123,7 @@ def validate_tracked_path_bytes(raw: bytes) -> list[str]:
     """
 
     validated: list[str] = []
+    checkout_identities: set[str] = set()
     for item in raw.split(b"\0"):
         if not item:
             continue
@@ -128,6 +146,13 @@ def validate_tracked_path_bytes(raw: bytes) -> list[str]:
             raise RuntimeError(
                 "Git index contains a tracked path outside the repository boundary"
             )
+
+        checkout_identity = checkout_path_identity(path)
+        if checkout_identity in checkout_identities:
+            raise RuntimeError(
+                "Git index contains tracked paths with colliding checkout identities"
+            )
+        checkout_identities.add(checkout_identity)
         validated.append(path)
     return validated
 

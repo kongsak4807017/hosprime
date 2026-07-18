@@ -1,7 +1,10 @@
+import io
 import sys
 import unittest
+from contextlib import redirect_stderr
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
@@ -15,8 +18,8 @@ scanner = module_from_spec(SCANNER_SPEC)
 sys.modules[SCANNER_NAME] = scanner
 SCANNER_SPEC.loader.exec_module(scanner)
 
-# The production entry imports `secret_scan` by its normal module name. Bind the
-# isolated test module to that name before loading the extension entrypoint.
+# The production entry imports `secret_scan` by its normal module name only after
+# validating tracked paths. Bind the isolated module for focused rule tests.
 sys.modules["secret_scan"] = scanner
 ENTRY_NAME = "hosprime_secret_scan_m0_entry"
 ENTRY_SPEC = spec_from_file_location(ENTRY_NAME, SCRIPTS / "secret_scan_m0_entry.py")
@@ -54,6 +57,31 @@ class SecretScanModernPatternTests(unittest.TestCase):
 
         self.assertEqual(names.count("github-fine-grained-pat"), 1)
         self.assertEqual(names.count("encrypted-private-key"), 1)
+
+    def test_path_validation_failure_prevents_scanner_import(self) -> None:
+        imported_names: list[str] = []
+        original_import = __import__
+
+        def recording_import(name, *args, **kwargs):
+            imported_names.append(name)
+            return original_import(name, *args, **kwargs)
+
+        with mock.patch.object(
+            entry.secret_scan_entry,
+            "validate_tracked_paths",
+            side_effect=RuntimeError("synthetic unsafe path"),
+        ):
+            with mock.patch("builtins.__import__", side_effect=recording_import):
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    result = entry.main([])
+
+        self.assertEqual(result, 2)
+        self.assertNotIn("secret_scan", imported_names)
+        self.assertEqual(
+            stderr.getvalue().strip(), entry.secret_scan_entry.GENERIC_SCAN_ERROR
+        )
+        self.assertNotIn("synthetic unsafe path", stderr.getvalue())
 
 
 if __name__ == "__main__":

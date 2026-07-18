@@ -22,6 +22,7 @@ from typing import Callable, Sequence
 
 UNSAFE_UNICODE_CATEGORIES = {"Cc", "Cf", "Zl", "Zp"}
 GENERIC_SCAN_ERROR = "SECRET SCAN ERROR: selected scope could not be safely scanned"
+SCAN_PASSED_MESSAGE = "SECRET SCAN PASSED: no likely credentials found in the selected scope."
 SCAN_FAILED_HEADER = "SECRET SCAN FAILED: possible credentials detected (values redacted)."
 SCAN_FAILED_FOOTER = (
     "Remove the value from Git and rotate/revoke it through the accountable owner."
@@ -204,11 +205,11 @@ def sanitize_failed_scan_stdout(output: str) -> str:
 
 
 def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> int:
-    """Run the scanner while withholding repository-controlled output details.
+    """Run the scanner through a closed, non-disclosing evidence envelope.
 
-    Operational errors use one stable generic message. Credential findings retain the
-    rule and line number but replace repository-controlled paths with a deterministic
-    fingerprint, preventing credentials embedded in filenames from leaking into logs.
+    Only one exact pass message or the fixed failure envelope is allowed. Credential
+    findings retain rule and line number while repository-controlled paths become
+    deterministic fingerprints. Any stderr or unexpected stdout fails closed.
     """
 
     captured_stdout = io.StringIO()
@@ -216,25 +217,30 @@ def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> i
     with redirect_stdout(captured_stdout), redirect_stderr(captured_stderr):
         result = scanner_main(None)
 
-    if result == 2:
-        print(GENERIC_SCAN_ERROR, file=sys.stderr)
-        return result
+    stdout_value = captured_stdout.getvalue()
+    stderr_value = captured_stderr.getvalue()
+
+    if result == 0:
+        if stderr_value or stdout_value != f"{SCAN_PASSED_MESSAGE}\n":
+            print(GENERIC_SCAN_ERROR, file=sys.stderr)
+            return 2
+        print(SCAN_PASSED_MESSAGE)
+        return 0
 
     if result == 1:
+        if stderr_value:
+            print(GENERIC_SCAN_ERROR, file=sys.stderr)
+            return 2
         try:
-            sanitized = sanitize_failed_scan_stdout(captured_stdout.getvalue())
+            sanitized = sanitize_failed_scan_stdout(stdout_value)
         except RuntimeError:
             print(GENERIC_SCAN_ERROR, file=sys.stderr)
             return 2
         print(sanitized, end="")
-    elif captured_stdout.getvalue():
-        print(captured_stdout.getvalue(), end="")
+        return 1
 
-    if captured_stderr.getvalue():
-        # Preserve non-operational diagnostics such as argparse usage errors only when
-        # the scanner did not classify the run as an unsafe-scope error.
-        print(captured_stderr.getvalue(), end="", file=sys.stderr)
-    return result
+    print(GENERIC_SCAN_ERROR, file=sys.stderr)
+    return 2
 
 
 def main(argv: Sequence[str] | None = None) -> int:

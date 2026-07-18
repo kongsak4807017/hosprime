@@ -11,6 +11,9 @@ if str(SCRIPTS) not in sys.path:
 
 import verify_secret_gate
 
+BASE_SHA = "1" * 40
+HEAD_SHA = "2" * 40
+
 
 class VerifySecretGateTests(unittest.TestCase):
     def test_build_commands_runs_complete_gate_in_order(self) -> None:
@@ -70,6 +73,60 @@ class VerifySecretGateTests(unittest.TestCase):
 
         self.assertEqual(status, 2)
         emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
+
+    def test_malformed_range_fails_before_any_gate(self) -> None:
+        with (
+            patch.object(verify_secret_gate, "run_commands") as run_commands,
+            patch("builtins.print") as emit,
+        ):
+            status = verify_secret_gate.main(["--git-range", "main...HEAD"])
+
+        self.assertEqual(status, 2)
+        run_commands.assert_not_called()
+        emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
+
+    @patch.object(verify_secret_gate.subprocess, "run")
+    def test_range_head_must_match_checkout_head(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            [], 0, stdout=("3" * 40) + "\n", stderr=""
+        )
+
+        with (
+            patch.object(verify_secret_gate, "run_commands") as run_commands,
+            patch("builtins.print") as emit,
+        ):
+            status = verify_secret_gate.main(
+                ["--git-range", f"{BASE_SHA}...{HEAD_SHA}"]
+            )
+
+        self.assertEqual(status, 2)
+        run_commands.assert_not_called()
+        emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
+
+    @patch.object(verify_secret_gate.subprocess, "run")
+    def test_matching_exact_head_allows_gate(self, run) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            [], 0, stdout=HEAD_SHA + "\n", stderr=""
+        )
+
+        with patch.object(
+            verify_secret_gate, "run_commands", return_value=0
+        ) as run_commands:
+            status = verify_secret_gate.main(
+                ["--git-range", f"{BASE_SHA}...{HEAD_SHA}"]
+            )
+
+        self.assertEqual(status, 0)
+        run_commands.assert_called_once_with(
+            verify_secret_gate.build_commands(f"{BASE_SHA}...{HEAD_SHA}")
+        )
+        run.assert_called_once_with(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
 
 if __name__ == "__main__":

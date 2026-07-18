@@ -10,7 +10,9 @@ scanner prevents new exposure and supports a manual full-tree audit.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -92,6 +94,7 @@ TEXT_SUFFIXES = {
 }
 
 MAX_FILE_BYTES = 2_000_000
+READ_CHUNK_BYTES = 64 * 1024
 
 
 def run_git(*args: str) -> bytes:
@@ -193,44 +196,72 @@ def should_scan(path: Path) -> bool:
     return path.suffix.lower() in TEXT_SUFFIXES
 
 
+def read_regular_file_safely(path: Path, max_bytes: int = MAX_FILE_BYTES) -> bytes:
+    """Read one regular file without following a swapped symbolic link.
+
+    A separate ``is_symlink`` / ``stat`` / ``read_bytes`` sequence is vulnerable to a
+    time-of-check/time-of-use race. Open the path once, reject symlinks with
+    ``O_NOFOLLOW`` where available, compare the pre-open and opened-file identities,
+    and enforce the byte limit while reading from that same descriptor.
+    """
+
+    try:
+        before = os.lstat(path)
+        if not stat.S_ISREG(before.st_mode):
+            raise RuntimeError("tracked text path could not be safely read")
+
+        flags = os.O_RDONLY
+        flags |= getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+    except (OSError, RuntimeError) as exc:
+        raise RuntimeError("tracked text path could not be safely read") from exc
+
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise RuntimeError("tracked text path could not be safely read")
+        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            raise RuntimeError("tracked text path could not be safely read")
+        if opened.st_size > max_bytes:
+            raise RuntimeError("tracked text path could not be safely read")
+
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(READ_CHUNK_BYTES, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > max_bytes:
+                raise RuntimeError("tracked text path could not be safely read")
+        return b"".join(chunks)
+    except OSError as exc:
+        raise RuntimeError("tracked text path could not be safely read") from exc
+    finally:
+        os.close(descriptor)
+
+
 def tracked_paths() -> list[Path]:
     raw = run_git("ls-files", "-z")
     return [Path(item.decode("utf-8")) for item in raw.split(b"\0") if item]
 
 
 def scan_tracked_files(paths: Iterable[Path]) -> list[Finding]:
-    """Scan candidate tracked text files and fail closed on unsafe input.
-
-    Candidate configuration and source files must never be silently skipped because
-    they are symlinks, oversized, contain NUL bytes, or contain malformed UTF-8.
-    Following a tracked symlink could read outside the checkout, while a dangling
-    symlink could bypass scanning entirely, so both conditions are explicit errors.
-    """
+    """Scan candidate tracked text files and fail closed on unsafe input."""
 
     findings: list[Finding] = []
     for path in paths:
         if not should_scan(path):
             continue
-        if path.is_symlink():
-            raise RuntimeError(
-                f"tracked text path is a symbolic link and cannot be safely scanned: {path}"
-            )
-        if not path.is_file():
-            raise RuntimeError(f"tracked text path is not a regular file: {path}")
-        try:
-            file_size = path.stat().st_size
-            if file_size > MAX_FILE_BYTES:
-                raise RuntimeError(
-                    f"tracked text file exceeds {MAX_FILE_BYTES} byte scan limit: {path}"
-                )
-            data = path.read_bytes()
-        except OSError as exc:
-            raise RuntimeError(f"cannot read tracked file {path}: {exc}") from exc
+        data = read_regular_file_safely(path)
         if b"\0" in data:
             raise RuntimeError(
-                f"tracked text file contains NUL bytes and cannot be safely scanned: {path}"
+                "tracked text file contains NUL bytes and cannot be safely scanned"
             )
-        text = decode_utf8(data, f"tracked text file {path}")
+        text = decode_utf8(data, "tracked text file")
         findings.extend(scan_text(path.as_posix(), text))
     return findings
 
@@ -270,7 +301,7 @@ def scan_added_diff(git_range: str) -> list[Finding]:
         validated_range,
         "--",
     )
-    diff = decode_utf8(raw_diff, f"git diff {validated_range}")
+    diff = decode_utf8(raw_diff, "git diff")
     findings: list[Finding] = []
     current_path = "<diff>"
     new_line = 0

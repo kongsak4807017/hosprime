@@ -20,6 +20,7 @@ from typing import Any, Callable
 GENERIC_READ_ERROR = "tracked text path could not be safely read"
 INSTALL_MARKER = "_hosprime_component_pinned_reader_installed"
 ROOT_FD_MARKER = "_hosprime_component_pinned_root_fd"
+ROOT_IDENTITY_MARKER = "_hosprime_component_pinned_root_identity"
 
 
 def _detect_component_pinning_support() -> bool:
@@ -61,6 +62,12 @@ def _file_flags() -> int:
 
 def _same_identity(before: os.stat_result, opened: os.stat_result) -> bool:
     return (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+
+
+def _directory_identity(metadata: os.stat_result) -> tuple[int, int, int]:
+    """Return the immutable trust identity for a pinned checkout directory."""
+
+    return metadata.st_dev, metadata.st_ino, metadata.st_mode
 
 
 def _is_single_link_regular(metadata: os.stat_result) -> bool:
@@ -145,13 +152,25 @@ def _open_components(directory_fd: int, components: list[str]) -> tuple[int, os.
         os.close(directory_fd)
 
 
-def _open_component_pinned_at(root_fd: int, path: Path) -> tuple[int, os.stat_result]:
-    """Open a repository-relative file from an already pinned checkout root."""
+def _open_component_pinned_at(
+    root_fd: int,
+    expected_root_identity: tuple[int, int, int],
+    path: Path,
+) -> tuple[int, os.stat_result]:
+    """Open a repository-relative file from a verified pinned checkout root."""
 
     components = _validated_relative_components(Path(path))
     try:
         owned_root_fd = os.dup(root_fd)
-    except OSError as exc:
+        opened_root = os.fstat(owned_root_fd)
+        if (
+            not stat.S_ISDIR(opened_root.st_mode)
+            or _directory_identity(opened_root) != expected_root_identity
+        ):
+            raise RuntimeError(GENERIC_READ_ERROR)
+    except (OSError, RuntimeError) as exc:
+        if "owned_root_fd" in locals():
+            os.close(owned_root_fd)
         raise RuntimeError(GENERIC_READ_ERROR) from exc
     return _open_components(owned_root_fd, components)
 
@@ -224,11 +243,13 @@ def install_component_pinned_reader(secret_scan: Any) -> None:
             root_metadata = os.fstat(root_fd)
             if not stat.S_ISDIR(root_metadata.st_mode):
                 raise RuntimeError(GENERIC_READ_ERROR)
+            root_identity = _directory_identity(root_metadata)
         except (OSError, RuntimeError) as exc:
             if root_fd is not None:
                 os.close(root_fd)
             raise RuntimeError(GENERIC_READ_ERROR) from exc
         setattr(secret_scan, ROOT_FD_MARKER, root_fd)
+        setattr(secret_scan, ROOT_IDENTITY_MARKER, root_identity)
 
     def read_regular_file_safely(
         path: Path,
@@ -242,9 +263,18 @@ def install_component_pinned_reader(secret_scan: Any) -> None:
                 descriptor, opened = _open_component_pinned(candidate)
             else:
                 pinned_root_fd = getattr(secret_scan, ROOT_FD_MARKER, None)
-                if not isinstance(pinned_root_fd, int):
+                pinned_root_identity = getattr(secret_scan, ROOT_IDENTITY_MARKER, None)
+                if not isinstance(pinned_root_fd, int) or not (
+                    isinstance(pinned_root_identity, tuple)
+                    and len(pinned_root_identity) == 3
+                    and all(isinstance(value, int) for value in pinned_root_identity)
+                ):
                     raise RuntimeError(GENERIC_READ_ERROR)
-                descriptor, opened = _open_component_pinned_at(pinned_root_fd, candidate)
+                descriptor, opened = _open_component_pinned_at(
+                    pinned_root_fd,
+                    pinned_root_identity,
+                    candidate,
+                )
             return _read_from_descriptor(
                 descriptor,
                 opened,

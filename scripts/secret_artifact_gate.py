@@ -53,12 +53,13 @@ FINDING_RULE_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def _load_scanner() -> Any:
-    """Load the scanner and current M0 rules after path validation."""
+    """Load the scanner, current M0 rules, and hardened reader after validation."""
 
     import secret_scan
     import secret_scan_m0_entry
 
     secret_scan_m0_entry.install_modern_rules()
+    secret_scan_m0_entry.install_secure_reader()
     return secret_scan
 
 

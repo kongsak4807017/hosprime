@@ -99,6 +99,37 @@ class SecretScanParentSymlinkTests(unittest.TestCase):
             self.assertEqual(data, b"SAFE=value")
             self.assertNotIn(b"synthetic-external-value", data)
 
+    def test_in_place_rewrite_during_read_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tracked = Path(directory) / "checkout" / "managed" / "settings.env"
+            tracked.parent.mkdir(parents=True)
+            tracked.write_text("SAFE=value", encoding="utf-8")
+
+            real_read = os.read
+            rewritten = False
+
+            def rewrite_after_first_read(descriptor, size):
+                nonlocal rewritten
+                chunk = real_read(descriptor, size)
+                if chunk and not rewritten:
+                    rewritten = True
+                    tracked.write_text("RISK=value", encoding="utf-8")
+                return chunk
+
+            with patch.object(os, "read", rewrite_after_first_read):
+                with self.assertRaisesRegex(RuntimeError, "safely read"):
+                    scanner.read_regular_file_safely(tracked)
+
+    def test_invalid_read_limits_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tracked = Path(directory) / "checkout" / "managed" / "settings.env"
+            tracked.parent.mkdir(parents=True)
+            tracked.write_text("SAFE=value", encoding="utf-8")
+
+            descriptor, opened = secure_io._open_component_pinned(tracked)
+            with self.assertRaisesRegex(RuntimeError, "safely read"):
+                secure_io._read_from_descriptor(descriptor, opened, -1, 1)
+
     def test_nested_regular_file_remains_scannable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tracked = Path(directory) / "checkout" / "managed" / "settings.env"

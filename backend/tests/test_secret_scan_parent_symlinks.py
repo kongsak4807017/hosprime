@@ -210,6 +210,52 @@ class SecretScanParentSymlinkTests(unittest.TestCase):
             self.assertEqual(data, b"SAFE=value")
             self.assertNotIn(b"synthetic-cwd-redirection", data)
 
+    def test_reused_checkout_root_descriptor_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / "checkout"
+            external = root / "external"
+            (checkout / "managed").mkdir(parents=True)
+            (external / "managed").mkdir(parents=True)
+            (checkout / "managed" / "settings.env").write_text(
+                "SAFE=value", encoding="utf-8"
+            )
+            (external / "managed" / "settings.env").write_text(
+                "ADMIN_PASSWORD=synthetic-reused-root-fd", encoding="utf-8"
+            )
+
+            isolated_scanner = load_module(
+                "hosprime_reused_root_scanner", "secret_scan.py"
+            )
+            previous = Path.cwd()
+            pinned_root_fd = None
+            replacement_fd = None
+            try:
+                os.chdir(checkout)
+                secure_io.install_component_pinned_reader(isolated_scanner)
+                pinned_root_fd = getattr(isolated_scanner, secure_io.ROOT_FD_MARKER)
+                os.close(pinned_root_fd)
+
+                replacement_fd = os.open(external, secure_io._directory_flags())
+                if replacement_fd != pinned_root_fd:
+                    os.dup2(replacement_fd, pinned_root_fd)
+                    os.close(replacement_fd)
+                    replacement_fd = None
+
+                with self.assertRaisesRegex(RuntimeError, "safely read"):
+                    isolated_scanner.read_regular_file_safely(
+                        Path("managed/settings.env")
+                    )
+            finally:
+                os.chdir(previous)
+                if isinstance(replacement_fd, int):
+                    os.close(replacement_fd)
+                if isinstance(pinned_root_fd, int):
+                    try:
+                        os.close(pinned_root_fd)
+                    except OSError:
+                        pass
+
     def test_nested_regular_file_remains_scannable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tracked = Path(directory) / "checkout" / "managed" / "settings.env"

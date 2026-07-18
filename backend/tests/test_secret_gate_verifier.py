@@ -110,6 +110,7 @@ class VerifySecretGateTests(unittest.TestCase):
         )
 
         with (
+            patch.object(verify_secret_gate, "exact_range_is_valid", return_value=True),
             patch.object(verify_secret_gate, "checkout_is_pristine", return_value=True),
             patch.object(verify_secret_gate, "run_commands", return_value=0) as run_commands,
         ):
@@ -182,6 +183,68 @@ class VerifySecretGateTests(unittest.TestCase):
                     verify_secret_gate, "_run_git_probe", return_value=completed
                 ):
                     self.assertFalse(verify_secret_gate.checkout_is_pristine())
+
+    def test_exact_range_requires_both_commit_objects_and_ancestry(self) -> None:
+        successful = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with patch.object(
+            verify_secret_gate,
+            "_run_git_probe",
+            side_effect=[successful, successful, successful],
+        ) as probe:
+            self.assertTrue(verify_secret_gate.exact_range_is_valid(BASE_SHA, HEAD_SHA))
+
+        self.assertEqual(
+            [call.args[0] for call in probe.call_args_list],
+            [
+                ["cat-file", "-e", f"{BASE_SHA}^{{commit}}"],
+                ["cat-file", "-e", f"{HEAD_SHA}^{{commit}}"],
+                ["merge-base", "--is-ancestor", BASE_SHA, HEAD_SHA],
+            ],
+        )
+
+    def test_missing_or_non_ancestor_range_fails_closed(self) -> None:
+        failure_cases = (
+            [None],
+            [subprocess.CompletedProcess([], 1, stdout="", stderr="")],
+            [
+                subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+                subprocess.CompletedProcess([], 1, stdout="", stderr=""),
+            ],
+            [
+                subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+                subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+                subprocess.CompletedProcess([], 1, stdout="", stderr=""),
+            ],
+            [
+                subprocess.CompletedProcess([], 0, stdout="", stderr="detail"),
+            ],
+        )
+        for probe_results in failure_cases:
+            with self.subTest(probe_results=probe_results):
+                with patch.object(
+                    verify_secret_gate,
+                    "_run_git_probe",
+                    side_effect=probe_results,
+                ):
+                    self.assertFalse(
+                        verify_secret_gate.exact_range_is_valid(BASE_SHA, HEAD_SHA)
+                    )
+
+    def test_invalid_exact_range_stops_before_security_commands(self) -> None:
+        with (
+            patch.object(verify_secret_gate, "checkout_matches_expected_head", return_value=True),
+            patch.object(verify_secret_gate, "exact_range_is_valid", return_value=False),
+            patch.object(verify_secret_gate, "checkout_is_pristine", return_value=True),
+            patch.object(verify_secret_gate, "run_commands") as run_commands,
+            patch("builtins.print") as emit,
+        ):
+            status = verify_secret_gate.main(
+                ["--git-range", f"{BASE_SHA}...{HEAD_SHA}"]
+            )
+
+        self.assertEqual(status, 2)
+        run_commands.assert_not_called()
+        emit.assert_called_once_with(verify_secret_gate.GENERIC_FAILURE, file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -53,32 +53,44 @@ class SecretScanEntryErrorRedactionTests(unittest.TestCase):
         self.assertEqual(output.strip(), entry_module.GENERIC_SCAN_ERROR)
         self.assertNotIn("synthetic-secret-marker", output)
 
-    def test_non_error_scanner_stderr_is_preserved(self) -> None:
-        def diagnostic_scanner(_argv):
-            print("SECRET SCAN PASSED: no likely credentials found in the selected scope.")
-            print("usage diagnostic", file=sys.stderr)
+    def test_exact_pass_message_is_preserved(self) -> None:
+        def passing_scanner(_argv):
+            print(entry_module.SCAN_PASSED_MESSAGE)
             return 0
 
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            result = entry_module.run_scanner_safely(diagnostic_scanner)
+            result = entry_module.run_scanner_safely(passing_scanner)
 
         self.assertEqual(result, 0)
-        self.assertEqual(
-            stdout.getvalue(),
-            "SECRET SCAN PASSED: no likely credentials found in the selected scope.\n",
-        )
-        self.assertEqual(stderr.getvalue(), "usage diagnostic\n")
+        self.assertEqual(stdout.getvalue(), f"{entry_module.SCAN_PASSED_MESSAGE}\n")
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_pass_with_unexpected_output_or_stderr_fails_closed(self) -> None:
+        sensitive_detail = "synthetic-secret-marker"
+
+        def noisy_passing_scanner(_argv):
+            print(entry_module.SCAN_PASSED_MESSAGE)
+            print(sensitive_detail, file=sys.stderr)
+            return 0
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = entry_module.run_scanner_safely(noisy_passing_scanner)
+
+        self.assertEqual(result, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue().strip(), entry_module.GENERIC_SCAN_ERROR)
+        self.assertNotIn(sensitive_detail, stderr.getvalue())
 
     def test_failed_finding_replaces_repository_path_with_fingerprint(self) -> None:
         sensitive_path = "private/synthetic-secret-marker.env"
 
         def finding_scanner(_argv):
             print(entry_module.SCAN_FAILED_HEADER)
-            print(
-                f"{sensitive_path}:7: credential-assignment: <redacted>"
-            )
+            print(f"{sensitive_path}:7: credential-assignment: <redacted>")
             print(entry_module.SCAN_FAILED_FOOTER)
             return 1
 
@@ -109,6 +121,26 @@ class SecretScanEntryErrorRedactionTests(unittest.TestCase):
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
             result = entry_module.run_scanner_safely(malformed_scanner)
+
+        self.assertEqual(result, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue().strip(), entry_module.GENERIC_SCAN_ERROR)
+        self.assertNotIn(sensitive_detail, stderr.getvalue())
+
+    def test_failed_scan_stderr_fails_closed(self) -> None:
+        sensitive_detail = "synthetic-secret-marker"
+
+        def noisy_finding_scanner(_argv):
+            print(entry_module.SCAN_FAILED_HEADER)
+            print("safe.env:3: credential-assignment: <redacted>")
+            print(entry_module.SCAN_FAILED_FOOTER)
+            print(sensitive_detail, file=sys.stderr)
+            return 1
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = entry_module.run_scanner_safely(noisy_finding_scanner)
 
         self.assertEqual(result, 2)
         self.assertEqual(stdout.getvalue(), "")

@@ -89,7 +89,7 @@ def path_crosses_repository_boundary(path: str) -> bool:
     """Reject paths unsafe on either POSIX or Windows checkout semantics.
 
     Git stores path bytes independently of the runner operating system. A path such as
-    ``..\\outside.env`` is an ordinary filename on POSIX but parent traversal on
+    ``..\outside.env`` is an ordinary filename on POSIX but parent traversal on
     Windows, while drive-relative and root-relative Windows paths can resolve outside
     the checkout. Validate both path grammars and Windows filename rules so evidence
     produced on Linux remains a valid security boundary for every supported M0 platform.
@@ -209,13 +209,26 @@ def run_scanner_safely(scanner_main: Callable[[Sequence[str] | None], int]) -> i
 
     Only one exact pass message or the fixed failure envelope is allowed. Credential
     findings retain rule and line number while repository-controlled paths become
-    deterministic fingerprints. Any stderr or unexpected stdout fails closed.
+    deterministic fingerprints. Any stderr, unexpected stdout, exception, or explicit
+    process exit fails closed without allowing traceback or exception text to escape.
     """
 
     captured_stdout = io.StringIO()
     captured_stderr = io.StringIO()
+    terminated_unexpectedly = False
     with redirect_stdout(captured_stdout), redirect_stderr(captured_stderr):
-        result = scanner_main(None)
+        try:
+            result = scanner_main(None)
+        except (Exception, SystemExit):
+            # The exception message, traceback context, or argparse exit output can
+            # contain repository-controlled paths or values. Convert all unexpected
+            # scanner termination into the same non-disclosing operational failure.
+            terminated_unexpectedly = True
+            result = 2
+
+    if terminated_unexpectedly:
+        print(GENERIC_SCAN_ERROR, file=sys.stderr)
+        return 2
 
     stdout_value = captured_stdout.getvalue()
     stderr_value = captured_stderr.getvalue()

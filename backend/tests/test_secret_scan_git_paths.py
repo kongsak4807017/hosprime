@@ -54,6 +54,26 @@ class SecretScanGitPathTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "outside the repository boundary"):
             entry_module.validate_tracked_path_bytes(b"../outside.env\0")
 
+    def test_cross_platform_boundary_paths_fail_closed(self) -> None:
+        unsafe_paths = (
+            "..\\outside.env",
+            "safe\\..\\outside.env",
+            "C:\\outside.env",
+            "C:outside.env",
+            "\\outside.env",
+            "\\\\server\\share\\outside.env",
+            "/outside.env",
+        )
+        for unsafe_path in unsafe_paths:
+            with self.subTest(path_kind=unsafe_path[:2]):
+                with self.assertRaisesRegex(
+                    RuntimeError, "outside the repository boundary"
+                ) as context:
+                    entry_module.validate_tracked_path_bytes(
+                        unsafe_path.encode("utf-8") + b"\0"
+                    )
+                self.assertNotIn("outside.env", str(context.exception))
+
     def test_valid_utf8_repository_paths_are_returned(self) -> None:
         self.assertEqual(
             entry_module.validate_tracked_path_bytes(

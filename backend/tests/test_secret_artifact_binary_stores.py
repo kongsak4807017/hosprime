@@ -29,6 +29,8 @@ class SecretArtifactBinaryStoreTests(unittest.TestCase):
             "private/service.pkcs12",
             "private/service.jks",
             "private/service.keystore",
+            "private/service.bks",
+            "private/service.bcfks",
             "private/service.kdb",
             "private/service.kdbx",
         ]
@@ -41,6 +43,8 @@ class SecretArtifactBinaryStoreTests(unittest.TestCase):
     def test_new_binary_store_suffixes_fail_closed_without_path_disclosure(self) -> None:
         sensitive_paths = [
             "private/identifying-name.pkcs12",
+            "private/identifying-name.bks",
+            "private/identifying-name.bcfks",
             "private/identifying-name.kdb",
         ]
         with mock.patch.object(
@@ -59,6 +63,8 @@ class SecretArtifactBinaryStoreTests(unittest.TestCase):
         self.assertIn("tracked binary credential store detected", rendered)
         self.assertNotIn("identifying-name", rendered)
         self.assertNotIn(".pkcs12", rendered)
+        self.assertNotIn(".bks", rendered)
+        self.assertNotIn(".bcfks", rendered)
         self.assertNotIn(".kdb", rendered)
 
 

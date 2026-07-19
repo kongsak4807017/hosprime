@@ -80,19 +80,39 @@ def test_environment_path_is_normalized_before_scripts_change_directory() -> Non
         assert content.index("[System.IO.Path]::GetFullPath($EnvFile)") < content.index("Push-Location $RootDir")
 
 
-def test_healthcheck_ports_are_integer_and_bounded() -> None:
+def test_healthcheck_endpoints_use_compose_runtime_ports() -> None:
     shell = read("scripts/healthcheck.sh")
     powershell = read("scripts/healthcheck.ps1")
 
-    assert "validate_port BACKEND_PORT" in shell
-    assert "validate_port FRONTEND_PORT" in shell
+    assert 'BACKEND_PORT="$(published_port backend 8000)"' in shell
+    assert 'FRONTEND_PORT="$(published_port frontend 80)"' in shell
+    assert 'compose port "$service" "$container_port"' in shell
+    assert "read_env" not in shell
+    assert 'grep -E "^[[:space:]]*${key}="' not in shell
     assert '[[ "$value" =~ ^[0-9]+$ ]]' in shell
     assert "10#$value >= 1 && 10#$value <= 65535" in shell
 
-    assert "Assert-Port 'BACKEND_PORT'" in powershell
-    assert "Assert-Port 'FRONTEND_PORT'" in powershell
+    assert "$BackendPort = Get-PublishedPort 'backend' 8000" in powershell
+    assert "$FrontendPort = Get-PublishedPort 'frontend' 80" in powershell
+    assert "docker compose --project-name $ProjectName --env-file $EnvFile port" in powershell
+    assert "Read-EnvValue" not in powershell
     assert "[int]::TryParse" in powershell
     assert "$port -lt 1 -or $port -gt 65535" in powershell
+
+
+def test_healthcheck_runtime_port_discovery_fails_closed_on_ambiguous_bindings() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    assert "sort -u" in shell
+    assert '[[ "$ports" != *$\'\\n\'* ]]' in shell
+    assert "No published host port" in shell
+    assert "Multiple published host ports" in shell
+
+    assert "Sort-Object -Unique" in powershell
+    assert "$ports.Count -ne 1" in powershell
+    assert "Unexpected published-port binding" in powershell
+    assert "Expected one published host port" in powershell
 
 
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:

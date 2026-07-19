@@ -16,17 +16,19 @@ validate_port() {
   (( 10#$value >= 1 && 10#$value <= 65535 )) || fail "$key must be between 1 and 65535"
 }
 published_port() {
-  local service="$1" container_port="$2" ports
-  ports="$(
+  local service="$1" container_port="$2" bindings port
+  bindings="$(
     compose port "$service" "$container_port" \
       | tr -d '\r' \
-      | awk -F: 'NF { print $NF }' \
+      | awk 'NF' \
       | sort -u
   )"
-  [[ -n "$ports" ]] || fail "No published host port for $service:$container_port in Compose project $PROJECT_NAME"
-  [[ "$ports" != *$'\n'* ]] || fail "Multiple published host ports for $service:$container_port in Compose project $PROJECT_NAME"
-  validate_port "${service^^}_PUBLISHED_PORT" "$ports"
-  printf '%s' "$ports"
+  [[ -n "$bindings" ]] || fail "No published host port for $service:$container_port in Compose project $PROJECT_NAME"
+  [[ "$bindings" != *$'\n'* ]] || fail "Multiple published host ports for $service:$container_port in Compose project $PROJECT_NAME"
+  [[ "$bindings" =~ ^127\.0\.0\.1:([0-9]+)$ ]] || fail "Published binding must use 127.0.0.1 for $service:$container_port in Compose project $PROJECT_NAME"
+  port="${BASH_REMATCH[1]}"
+  validate_port "${service^^}_PUBLISHED_PORT" "$port"
+  printf '%s' "$port"
 }
 container_id() {
   local service="$1" ids
@@ -111,6 +113,10 @@ for service in postgres redis neo4j backend frontend; do
   fi
 done
 
+POSTGRES_PORT="$(published_port postgres 5432)"
+REDIS_PORT="$(published_port redis 6379)"
+NEO4J_HTTP_PORT="$(published_port neo4j 7474)"
+NEO4J_BOLT_PORT="$(published_port neo4j 7687)"
 BACKEND_PORT="$(published_port backend 8000)"
 FRONTEND_PORT="$(published_port frontend 80)"
 BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
@@ -137,5 +143,7 @@ if ready.get("database_dialect") != "postgresql":
 PY
 
 printf 'HosPrime health check passed (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"
+printf 'Verified loopback bindings: postgres=%s redis=%s neo4j-http=%s neo4j-bolt=%s backend=%s frontend=%s\n' \
+  "$POSTGRES_PORT" "$REDIS_PORT" "$NEO4J_HTTP_PORT" "$NEO4J_BOLT_PORT" "$BACKEND_PORT" "$FRONTEND_PORT"
 printf 'Backend: %s\nFrontend: %s\n' "$BACKEND_URL" "$FRONTEND_URL"
 compose ps

@@ -1,13 +1,19 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = $env:HOSPRIME_ENV_FILE
+    [string]$EnvFile = $env:HOSPRIME_ENV_FILE,
+    [string]$ProjectName = $env:HOSPRIME_COMPOSE_PROJECT_NAME
 )
 
 $ErrorActionPreference = 'Stop'
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir '.env' }
+if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }
 
 function Fail([string]$Message) { throw $Message }
+function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
+    & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
+    return $LASTEXITCODE
+}
 function Read-EnvValue([string]$Key, [string]$DefaultValue) {
     $match = Get-Content -LiteralPath $EnvFile | Where-Object { $_ -match "^\s*$([regex]::Escape($Key))=" } | Select-Object -Last 1
     if (-not $match) { return $DefaultValue }
@@ -16,9 +22,9 @@ function Read-EnvValue([string]$Key, [string]$DefaultValue) {
     return $value
 }
 function Get-ServiceContainerId([string]$Service) {
-    $id = [string]::Join('', @(& docker compose --env-file $EnvFile ps -q $Service)).Trim()
+    $id = [string]::Join('', @(& docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service)).Trim()
     if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect service: $Service" }
-    if ([string]::IsNullOrWhiteSpace($id)) { Fail "Service container does not exist: $Service" }
+    if ([string]::IsNullOrWhiteSpace($id)) { Fail "Service container does not exist in Compose project $ProjectName: $Service" }
     return $id
 }
 function Get-ContainerState([string]$ContainerId) {
@@ -32,6 +38,7 @@ function Get-ContainerHealth([string]$ContainerId) {
     return $health
 }
 
+if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
 if (-not (Test-Path -LiteralPath $EnvFile)) { Fail "Environment file not found: $EnvFile" }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
 & docker compose version *> $null
@@ -44,8 +51,8 @@ $FrontendUrl = "http://127.0.0.1:$FrontendPort"
 
 Push-Location $RootDir
 try {
-    & docker compose --env-file $EnvFile config --quiet
-    if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose configuration validation failed.' }
+    $status = Invoke-Compose config --quiet
+    if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 
     foreach ($service in @('postgres', 'redis', 'neo4j', 'backend', 'frontend')) {
         $containerId = Get-ServiceContainerId $service
@@ -64,11 +71,11 @@ try {
     if ($ready.database_dialect -ne 'postgresql') { Fail "Expected PostgreSQL runtime; got $($ready.database_dialect)" }
     if ([string]::IsNullOrWhiteSpace($frontend.Content)) { Fail 'Frontend returned an empty response.' }
 
-    Write-Host 'HosPrime health check passed.'
+    Write-Host "HosPrime health check passed (Compose project: $ProjectName)."
     Write-Host "Backend: $BackendUrl"
     Write-Host "Frontend: $FrontendUrl"
-    & docker compose --env-file $EnvFile ps
-    if ($LASTEXITCODE -ne 0) { Fail 'Unable to record Compose service state.' }
+    $status = Invoke-Compose ps
+    if ($status -ne 0) { Fail 'Unable to record Compose service state.' }
 }
 finally {
     Pop-Location

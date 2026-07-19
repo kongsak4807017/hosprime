@@ -84,6 +84,11 @@ SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine before bootstrap"
 export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"
 
+# Enforce the Git-ignore boundary before creating a new in-repository file.
+# This prevents even the initial placeholder copy from becoming an untracked,
+# credential-bearing file that can later be committed accidentally.
+assert_in_repo_env_is_ignored
+
 if [[ ! -e "$ENV_FILE" ]]; then
   [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
   cp .env.example "$ENV_FILE"
@@ -93,7 +98,6 @@ if [[ ! -e "$ENV_FILE" ]]; then
 fi
 [[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
 [[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
-assert_in_repo_env_is_ignored
 protect_env_file
 
 if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then

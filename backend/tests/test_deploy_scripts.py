@@ -115,6 +115,37 @@ def test_healthcheck_runtime_port_discovery_fails_closed_on_ambiguous_bindings()
     assert "Expected one published host port" in powershell
 
 
+def test_healthchecks_require_runtime_loopback_bindings_for_all_published_services() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    shell_calls = (
+        'published_port postgres 5432',
+        'published_port redis 6379',
+        'published_port neo4j 7474',
+        'published_port neo4j 7687',
+        'published_port backend 8000',
+        'published_port frontend 80',
+    )
+    for call in shell_calls:
+        assert call in shell
+    assert '127\\.0\\.0\\.1:([0-9]+)' in shell
+    assert "Published binding must use 127.0.0.1" in shell
+
+    powershell_calls = (
+        "Get-PublishedPort 'postgres' 5432",
+        "Get-PublishedPort 'redis' 6379",
+        "Get-PublishedPort 'neo4j' 7474",
+        "Get-PublishedPort 'neo4j' 7687",
+        "Get-PublishedPort 'backend' 8000",
+        "Get-PublishedPort 'frontend' 80",
+    )
+    for call in powershell_calls:
+        assert call in powershell
+    assert "^127\\.0\\.0\\.1:(\\d+)$" in powershell
+    assert "Published binding must use 127.0.0.1" in powershell
+
+
 def test_healthchecks_require_unique_project_scoped_service_containers() -> None:
     shell = read("scripts/healthcheck.sh")
     powershell = read("scripts/healthcheck.ps1")

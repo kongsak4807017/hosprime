@@ -17,6 +17,7 @@ Creates .env from .env.example when missing, validates configuration,
 builds and starts HosPrime, then runs the health check.
 Set HOSPRIME_ENV_FILE to an absolute path or a path relative to the caller.
 Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
+The checkout must be a pristine Git commit so runtime evidence is attributable.
 EOF
       exit 0
       ;;
@@ -31,6 +32,7 @@ require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found:
 require docker
 require curl
 require python3
+require git
 ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
 import os
 import sys
@@ -43,6 +45,10 @@ docker info >/dev/null 2>&1 || fail "Docker daemon is not available"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
 cd "$ROOT_DIR"
+SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source must be a Git checkout"
+[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve an exact HosPrime source commit"
+[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine before bootstrap"
+
 if [[ ! -e "$ENV_FILE" ]]; then
   [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
   cp .env.example "$ENV_FILE"
@@ -62,6 +68,6 @@ if [[ "$SKIP_BUILD" == false ]]; then
   compose build
 fi
 compose up --detach --wait --wait-timeout 240
-HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" bash "$ROOT_DIR/scripts/healthcheck.sh"
+HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" HOSPRIME_EXPECTED_GIT_SHA="$SOURCE_SHA" bash "$ROOT_DIR/scripts/healthcheck.sh"
 
-printf 'HosPrime local stack is ready (Compose project: %s).\n' "$PROJECT_NAME"
+printf 'HosPrime local stack is ready (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"

@@ -46,7 +46,9 @@ def test_application_images_are_stamped_and_verified_against_source() -> None:
     shell = read("scripts/healthcheck.sh")
     powershell = read("scripts/healthcheck.ps1")
 
-    assert compose.count("HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:?") == 2
+    build_arg = "HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:-0000000000000000000000000000000000000000}"
+    assert compose.count(build_arg) == 2
+    assert "Bootstrap must set HOSPRIME_BUILD_GIT_SHA" not in compose
     for dockerfile in (backend_dockerfile, frontend_dockerfile):
         assert "ARG HOSPRIME_GIT_SHA" in dockerfile
         assert "LABEL org.opencontainers.image.revision=$HOSPRIME_GIT_SHA" in dockerfile

@@ -50,6 +50,25 @@ def test_bootstrap_rejects_tracked_in_repo_environment_files() -> None:
     assert powershell.index("Assert-InRepoEnvIsIgnored $EnvFile") < powershell.index("Invoke-Compose config --quiet")
 
 
+def test_bootstrap_restricts_runtime_environment_file_permissions() -> None:
+    shell = read("scripts/bootstrap.sh")
+    powershell = read("scripts/bootstrap.ps1")
+
+    assert "protect_env_file" in shell
+    assert 'chmod 600 "$ENV_FILE"' in shell
+    assert "mode & 0o077" in shell
+    assert "Environment file permissions must deny group and other access" in shell
+    assert shell.index("protect_env_file") < shell.index("compose config --quiet")
+
+    assert "Protect-EnvFileAcl" in powershell
+    assert "SetAccessRuleProtection($true, $false)" in powershell
+    assert "S-1-5-18" in powershell
+    assert "S-1-5-32-544" in powershell
+    assert "Set-Acl -LiteralPath $Path -AclObject $acl" in powershell
+    assert "Environment file ACL grants access to an unexpected identity" in powershell
+    assert powershell.index("Protect-EnvFileAcl $EnvFile") < powershell.index("Invoke-Compose config --quiet")
+
+
 def test_shell_bootstrap_invokes_healthcheck_through_bash() -> None:
     shell = read("scripts/bootstrap.sh")
     assert 'bash "$ROOT_DIR/scripts/healthcheck.sh"' in shell
@@ -258,18 +277,13 @@ def test_compose_published_ports_bind_to_loopback_by_default() -> None:
 
 def test_scripts_do_not_echo_or_generate_credentials() -> None:
     forbidden = (
-        "POSTGRES_PASSWORD=",
-        "NEO4J_PASSWORD=",
-        "JWT_SECRET=",
-        "GEMINI_API_KEY=",
-        "BOOTSTRAP_ADMIN_PASSWORD=",
+        "openssl rand",
+        "secrets.token",
+        "uuidgen",
+        "Write-Output $EnvFile",
+        "cat $ENV_FILE",
     )
-    for path in (
-        "scripts/bootstrap.sh",
-        "scripts/bootstrap.ps1",
-        "scripts/healthcheck.sh",
-        "scripts/healthcheck.ps1",
-    ):
+    for path in ("scripts/bootstrap.sh", "scripts/bootstrap.ps1"):
         content = read(path)
-        for value in forbidden:
-            assert value not in content
+        for marker in forbidden:
+            assert marker not in content

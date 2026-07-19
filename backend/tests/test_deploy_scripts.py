@@ -115,6 +115,25 @@ def test_healthcheck_runtime_port_discovery_fails_closed_on_ambiguous_bindings()
     assert "Expected one published host port" in powershell
 
 
+def test_healthchecks_require_unique_project_scoped_service_containers() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    assert 'compose ps -q "$service"' in shell
+    assert '[[ "$ids" != *$\'\\n\'* ]]' in shell
+    assert '[[ "$ids" =~ ^[0-9a-f]{12,64}$ ]]' in shell
+    assert 'com.docker.compose.project' in shell
+    assert 'com.docker.compose.service' in shell
+    assert '[[ "$identity" == "$PROJECT_NAME|$service" ]]' in shell
+
+    assert "Sort-Object -Unique" in powershell
+    assert "$ids.Count -ne 1" in powershell
+    assert "$ids[0] -notmatch '^[0-9a-f]{12,64}$'" in powershell
+    assert 'com.docker.compose.project' in powershell
+    assert 'com.docker.compose.service' in powershell
+    assert '$identity -ne "${ProjectName}|${service}"' in powershell
+
+
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
     required = ("postgres", "redis", "neo4j", "backend", "frontend")
     for path in ("scripts/healthcheck.sh", "scripts/healthcheck.ps1"):

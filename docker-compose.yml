@@ -57,7 +57,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:?Bootstrap must set HOSPRIME_BUILD_GIT_SHA}
+        HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:-0000000000000000000000000000000000000000}
     restart: unless-stopped
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -102,7 +102,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:?Bootstrap must set HOSPRIME_BUILD_GIT_SHA}
+        HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:-0000000000000000000000000000000000000000}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-80}:80"

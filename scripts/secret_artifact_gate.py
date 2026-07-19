@@ -42,12 +42,16 @@ SENSITIVE_TEXT_BASENAMES = {
     "id_rsa",
 }
 
+# Binary credential stores cannot be safely inspected by the dependency-free text
+# scanner. Reject them by extension instead of permitting opaque key material in Git.
 FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
     ".jks",
+    ".kdb",
     ".kdbx",
     ".keystore",
     ".p12",
     ".pfx",
+    ".pkcs12",
 }
 FINDING_RULE_RE = re.compile(r"^[a-z0-9-]+$")
 

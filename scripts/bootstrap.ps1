@@ -8,9 +8,18 @@ param(
 $ErrorActionPreference = 'Stop'
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir '.env' }
+if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
+    $EnvFile = Join-Path (Get-Location).Path $EnvFile
+}
+$EnvFile = [System.IO.Path]::GetFullPath($EnvFile)
 if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }
 
 function Fail([string]$Message) { throw $Message }
+function Assert-RegularEnvFile([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer) { Fail "Environment path is not a regular file: $Path" }
+    if ($item.LinkType) { Fail "Environment file must not be a symbolic link: $Path" }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -26,10 +35,13 @@ if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 Push-Location $RootDir
 try {
     if (-not (Test-Path -LiteralPath $EnvFile)) {
+        $parent = Split-Path -Parent $EnvFile
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) { Fail "Environment file parent directory does not exist: $parent" }
         Copy-Item -LiteralPath (Join-Path $RootDir '.env.example') -Destination $EnvFile
         Write-Host "Created $EnvFile from .env.example. Replace every CHANGE_ME value, then run this command again."
         exit 2
     }
+    Assert-RegularEnvFile $EnvFile
 
     $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {
         $_ -notmatch '^\s*(#|$)' -and $_ -match 'CHANGE_ME'

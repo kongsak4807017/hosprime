@@ -17,7 +17,7 @@ read_env() {
 validate_port() {
   local key="$1" value="$2"
   [[ "$value" =~ ^[0-9]+$ ]] || fail "$key must be an integer between 1 and 65535"
-  (( value >= 1 && value <= 65535 )) || fail "$key must be between 1 and 65535"
+  (( 10#$value >= 1 && 10#$value <= 65535 )) || fail "$key must be between 1 and 65535"
 }
 container_id() {
   compose ps -q "$1"

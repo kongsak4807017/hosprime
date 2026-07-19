@@ -49,10 +49,17 @@ function Get-PublishedPort([string]$Service, [int]$ContainerPort) {
     return $ports[0]
 }
 function Get-ServiceContainerId([string]$Service) {
-    $id = [string]::Join('', @(& docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service)).Trim()
+    $ids = @(
+        & docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Sort-Object -Unique
+    )
     if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect service: $Service" }
-    if ([string]::IsNullOrWhiteSpace($id)) { Fail "Service container does not exist in Compose project $ProjectName: $Service" }
-    return $id
+    if ($ids.Count -eq 0) { Fail "Service container does not exist in Compose project ${ProjectName}: $Service" }
+    if ($ids.Count -ne 1) { Fail "Expected exactly one container for service $Service in Compose project $ProjectName" }
+    if ($ids[0] -notmatch '^[0-9a-f]{12,64}$') { Fail "Unexpected container identifier for service $Service" }
+    return $ids[0]
 }
 function Get-ContainerState([string]$ContainerId) {
     $state = [string]::Join('', @(& docker inspect --format '{{.State.Status}}' $ContainerId)).Trim()
@@ -63,6 +70,11 @@ function Get-ContainerHealth([string]$ContainerId) {
     $health = [string]::Join('', @(& docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $ContainerId)).Trim()
     if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect container health: $ContainerId" }
     return $health
+}
+function Get-ContainerComposeIdentity([string]$ContainerId) {
+    $identity = [string]::Join('', @(& docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}' $ContainerId)).Trim()
+    if ($LASTEXITCODE -ne 0) { Fail "Unable to inspect Compose identity: $ContainerId" }
+    return $identity
 }
 
 if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
@@ -79,6 +91,8 @@ try {
 
     foreach ($service in @('postgres', 'redis', 'neo4j', 'backend', 'frontend')) {
         $containerId = Get-ServiceContainerId $service
+        $identity = Get-ContainerComposeIdentity $containerId
+        if ($identity -ne "${ProjectName}|${service}") { Fail "Container identity mismatch for service $service in Compose project $ProjectName" }
         $state = Get-ContainerState $containerId
         if ($state -ne 'running') { Fail "Service is not running: $service ($state)" }
         $health = Get-ContainerHealth $containerId

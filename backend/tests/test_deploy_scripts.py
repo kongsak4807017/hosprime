@@ -60,6 +60,41 @@ def test_all_deploy_commands_bind_to_one_explicit_compose_project() -> None:
     assert "-ProjectName $ProjectName" in powershell_bootstrap
 
 
+def test_environment_path_is_normalized_before_scripts_change_directory() -> None:
+    shell_bootstrap = read("scripts/bootstrap.sh")
+    shell_health = read("scripts/healthcheck.sh")
+    powershell_bootstrap = read("scripts/bootstrap.ps1")
+    powershell_health = read("scripts/healthcheck.ps1")
+
+    for content in (shell_bootstrap, shell_health):
+        assert 'ENV_FILE_INPUT="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"' in content
+        assert "os.path.abspath(sys.argv[1])" in content
+        assert 'cd "$ROOT_DIR"' in content
+        assert content.index("os.path.abspath(sys.argv[1])") < content.index('cd "$ROOT_DIR"')
+        assert '[[ ! -L "$ENV_FILE" ]]' in content
+
+    for content in (powershell_bootstrap, powershell_health):
+        assert "[System.IO.Path]::IsPathRooted($EnvFile)" in content
+        assert "$EnvFile = [System.IO.Path]::GetFullPath($EnvFile)" in content
+        assert "if ($item.LinkType)" in content
+        assert content.index("[System.IO.Path]::GetFullPath($EnvFile)") < content.index("Push-Location $RootDir")
+
+
+def test_healthcheck_ports_are_integer_and_bounded() -> None:
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    assert "validate_port BACKEND_PORT" in shell
+    assert "validate_port FRONTEND_PORT" in shell
+    assert '[[ "$value" =~ ^[0-9]+$ ]]' in shell
+    assert "value >= 1 && value <= 65535" in shell
+
+    assert "Assert-Port 'BACKEND_PORT'" in powershell
+    assert "Assert-Port 'FRONTEND_PORT'" in powershell
+    assert "[int]::TryParse" in powershell
+    assert "$port -lt 1 -or $port -gt 65535" in powershell
+
+
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
     required = ("postgres", "redis", "neo4j", "backend", "frontend")
     for path in ("scripts/healthcheck.sh", "scripts/healthcheck.ps1"):

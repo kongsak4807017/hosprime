@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+ENV_FILE_INPUT="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
 PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
 SKIP_BUILD=false
 
@@ -15,6 +15,7 @@ Usage: scripts/bootstrap.sh [--skip-build]
 
 Creates .env from .env.example when missing, validates configuration,
 builds and starts HosPrime, then runs the health check.
+Set HOSPRIME_ENV_FILE to an absolute path or a path relative to the caller.
 Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
 EOF
       exit 0
@@ -25,22 +26,32 @@ done
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
-compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
 require curl
 require python3
+ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
+import os
+import sys
+print(os.path.abspath(sys.argv[1]))
+PY
+)"
+compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
+
 docker info >/dev/null 2>&1 || fail "Docker daemon is not available"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
 cd "$ROOT_DIR"
-if [[ ! -f "$ENV_FILE" ]]; then
+if [[ ! -e "$ENV_FILE" ]]; then
+  [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
   cp .env.example "$ENV_FILE"
   chmod 600 "$ENV_FILE" 2>/dev/null || true
   printf 'Created %s from .env.example. Replace every CHANGE_ME value, then run this command again.\n' "$ENV_FILE"
   exit 2
 fi
+[[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
+[[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
 
 if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then
   fail "$ENV_FILE still contains CHANGE_ME placeholders"

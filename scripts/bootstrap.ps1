@@ -43,10 +43,12 @@ if ($LASTEXITCODE -ne 0) { Fail 'Docker daemon is not available.' }
 & docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 
+$PreviousBuildGitSha = $env:HOSPRIME_BUILD_GIT_SHA
 Push-Location $RootDir
 try {
     $SourceSha = Get-ExactSourceSha
     Assert-PristineCheckout
+    $env:HOSPRIME_BUILD_GIT_SHA = $SourceSha
 
     if (-not (Test-Path -LiteralPath $EnvFile)) {
         $parent = Split-Path -Parent $EnvFile
@@ -80,5 +82,6 @@ try {
     Write-Host "HosPrime local stack is ready (Compose project: $ProjectName, source commit: $SourceSha)."
 }
 finally {
+    $env:HOSPRIME_BUILD_GIT_SHA = $PreviousBuildGitSha
     Pop-Location
 }

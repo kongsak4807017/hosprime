@@ -20,6 +20,9 @@ on:
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
       - "backend/tests/test_deploy_scripts.py"
+      - "backend/tests/test_deploy_source_provenance.py"
+      - "backend/tests/test_deploy_env_creation_guard.py"
+      - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -41,6 +44,9 @@ on:
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
       - "backend/tests/test_deploy_scripts.py"
+      - "backend/tests/test_deploy_source_provenance.py"
+      - "backend/tests/test_deploy_env_creation_guard.py"
+      - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -49,6 +55,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  HOSPRIME_COMPOSE_PROJECT_NAME: hosprime-ci
 
 jobs:
   secure-runtime-test:
@@ -75,7 +84,13 @@ jobs:
           pwsh -NoProfile -Command '$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("scripts/healthcheck.ps1", [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | Format-List | Out-String | Write-Error }'
 
       - name: Run secure runtime and deploy regression tests
-        run: python -m pytest -q backend/tests/test_secure_runtime_config.py backend/tests/test_deploy_scripts.py
+        run: |
+          python -m pytest -q \
+            backend/tests/test_secure_runtime_config.py \
+            backend/tests/test_deploy_scripts.py \
+            backend/tests/test_deploy_source_provenance.py \
+            backend/tests/test_deploy_env_creation_guard.py \
+            backend/tests/test_deploy_windows_acl_contract.py
 
       - name: Create ephemeral CI environment
         shell: bash
@@ -104,18 +119,11 @@ jobs:
           BACKEND_PORT=18000
           FRONTEND_PORT=18080
           EOF
+          chmod 600 .env
 
-      - name: Validate resolved Compose model
-        run: docker compose --env-file .env config --quiet
-
-      - name: Build deployable images
-        run: docker compose --env-file .env build
-
-      - name: Start complete Compose stack and wait for health
-        run: docker compose --env-file .env up --detach --wait --wait-timeout 240
-
-      - name: Verify cross-platform shell health-check contract at runtime
-        run: HOSPRIME_ENV_FILE="$PWD/.env" bash scripts/healthcheck.sh
+      - name: Build, start and verify exact-source Compose stack
+        shell: bash
+        run: HOSPRIME_ENV_FILE="$PWD/.env" bash scripts/bootstrap.sh
 
       - name: Verify backend liveness and readiness
         shell: bash
@@ -132,7 +140,7 @@ jobs:
           live = json.loads(Path("/tmp/hosprime-health-live.json").read_text())
           ready = json.loads(Path("/tmp/hosprime-health-ready.json").read_text())
           assert live.get("status") == "live", live
-          assert ready.get("status") in {"ready", "degraded"}, ready
+          assert ready.get("status") == "ready", ready
           assert ready.get("database_dialect") == "postgresql", ready
           PY
 
@@ -140,7 +148,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -v ON_ERROR_STOP=1 <<'SQL'
+          compose() {
+            docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env "$@"
+          }
+
+          compose exec -T postgres psql -U hosprime -d hosprime -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE IF NOT EXISTS bootstrap_restart_probe (
             id integer PRIMARY KEY,
             value text NOT NULL
@@ -150,15 +162,15 @@ jobs:
           ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
           SQL
 
-          before_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          before_hash="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
           test -n "$before_hash"
 
-          docker compose --env-file .env restart backend
+          compose restart backend
           timeout 180 bash -c 'until curl --fail --silent http://127.0.0.1:18000/health/ready >/dev/null; do sleep 3; done'
 
-          preserved="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT value FROM bootstrap_restart_probe WHERE id=1;")"
-          after_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
-          admin_count="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT count(*) FROM users WHERE username='ci-admin';")"
+          preserved="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT value FROM bootstrap_restart_probe WHERE id=1;")"
+          after_hash="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          admin_count="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT count(*) FROM users WHERE username='ci-admin';")"
 
           test "$preserved" = "preserve-me"
           test "$before_hash" = "$after_hash"
@@ -170,16 +182,20 @@ jobs:
           test -s /tmp/hosprime-frontend.html
 
       - name: Record running service state
-        run: docker compose --env-file .env ps
+        run: docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env ps
 
       - name: Capture Compose diagnostics on failure
         if: failure()
         shell: bash
         run: |
           mkdir -p /tmp/hosprime-compose-diagnostics
-          docker compose --env-file .env ps --all > /tmp/hosprime-compose-diagnostics/compose-ps.txt 2>&1 || true
-          docker compose --env-file .env logs --no-color --timestamps --tail=300 > /tmp/hosprime-compose-diagnostics/compose-logs.txt 2>&1 || true
-          docker inspect hosprime_postgres hosprime_redis hosprime_neo4j hosprime_backend hosprime_frontend > /tmp/hosprime-compose-diagnostics/docker-inspect.json 2>&1 || true
+          compose=(docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env)
+          "${compose[@]}" ps --all > /tmp/hosprime-compose-diagnostics/compose-ps.txt 2>&1 || true
+          "${compose[@]}" logs --no-color --timestamps --tail=300 > /tmp/hosprime-compose-diagnostics/compose-logs.txt 2>&1 || true
+          mapfile -t container_ids < <("${compose[@]}" ps -q | sort -u)
+          if ((${#container_ids[@]})); then
+            docker inspect "${container_ids[@]}" > /tmp/hosprime-compose-diagnostics/docker-inspect.json 2>&1 || true
+          fi
           cat /tmp/hosprime-compose-diagnostics/compose-ps.txt
           tail -n 120 /tmp/hosprime-compose-diagnostics/compose-logs.txt || true
 
@@ -194,7 +210,7 @@ jobs:
 
       - name: Stop complete Compose stack
         if: always()
-        run: docker compose --env-file .env down --volumes --remove-orphans || true
+        run: docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env down --volumes --remove-orphans || true
 
       - name: Remove ephemeral environment
         if: always()

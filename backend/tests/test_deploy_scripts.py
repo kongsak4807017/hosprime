@@ -87,7 +87,7 @@ def test_healthcheck_ports_are_integer_and_bounded() -> None:
     assert "validate_port BACKEND_PORT" in shell
     assert "validate_port FRONTEND_PORT" in shell
     assert '[[ "$value" =~ ^[0-9]+$ ]]' in shell
-    assert "value >= 1 && value <= 65535" in shell
+    assert "10#$value >= 1 && 10#$value <= 65535" in shell
 
     assert "Assert-Port 'BACKEND_PORT'" in powershell
     assert "Assert-Port 'FRONTEND_PORT'" in powershell

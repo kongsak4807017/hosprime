@@ -3,18 +3,20 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
 HTTP_CONNECT_TIMEOUT_SECONDS="${HOSPRIME_HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
 HTTP_MAX_TIME_SECONDS="${HOSPRIME_HTTP_MAX_TIME_SECONDS:-15}"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
+compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
 read_env() {
   local key="$1" default_value="$2" value
   value="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)"
   printf '%s' "${value:-$default_value}"
 }
 container_id() {
-  docker compose --env-file "$ENV_FILE" ps -q "$1"
+  compose ps -q "$1"
 }
 container_state() {
   docker inspect --format '{{.State.Status}}' "$1"
@@ -32,6 +34,7 @@ http_get() {
     "$1"
 }
 
+[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
 require curl
 require python3
@@ -46,11 +49,11 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 cd "$ROOT_DIR"
-docker compose --env-file "$ENV_FILE" config --quiet
+compose config --quiet
 
 for service in postgres redis neo4j backend frontend; do
   cid="$(container_id "$service")"
-  [[ -n "$cid" ]] || fail "Service container does not exist: $service"
+  [[ -n "$cid" ]] || fail "Service container does not exist in Compose project $PROJECT_NAME: $service"
   state="$(container_state "$cid")"
   [[ "$state" == "running" ]] || fail "Service is not running: $service ($state)"
   health="$(container_health "$cid")"
@@ -77,6 +80,6 @@ if ready.get("database_dialect") != "postgresql":
     raise SystemExit(f"Expected PostgreSQL runtime: {ready}")
 PY
 
-printf 'HosPrime health check passed.\n'
+printf 'HosPrime health check passed (Compose project: %s).\n' "$PROJECT_NAME"
 printf 'Backend: %s\nFrontend: %s\n' "$BACKEND_URL" "$FRONTEND_URL"
-docker compose --env-file "$ENV_FILE" ps
+compose ps

@@ -45,6 +45,8 @@ SENSITIVE_TEXT_BASENAMES = {
 # Binary credential stores cannot be safely inspected by the dependency-free text
 # scanner. Reject them by extension instead of permitting opaque key material in Git.
 FORBIDDEN_CREDENTIAL_STORE_SUFFIXES = {
+    ".bcfks",
+    ".bks",
     ".jks",
     ".kdb",
     ".kdbx",

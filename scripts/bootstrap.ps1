@@ -24,9 +24,20 @@ function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
 }
+function Get-ExactSourceSha() {
+    $sha = [string]::Join('', @(& git rev-parse --verify HEAD 2>$null)).Trim()
+    if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { Fail 'Unable to resolve an exact HosPrime source commit.' }
+    return $sha
+}
+function Assert-PristineCheckout() {
+    $status = @(& git status --porcelain=v1 --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) { Fail 'Unable to inspect HosPrime checkout status.' }
+    if ($status.Count -ne 0) { Fail 'HosPrime checkout must be pristine before bootstrap.' }
+}
 
 if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Fail 'Git is required.' }
 & docker info *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker daemon is not available.' }
 & docker compose version *> $null
@@ -34,6 +45,9 @@ if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 
 Push-Location $RootDir
 try {
+    $SourceSha = Get-ExactSourceSha
+    Assert-PristineCheckout
+
     if (-not (Test-Path -LiteralPath $EnvFile)) {
         $parent = Split-Path -Parent $EnvFile
         if (-not (Test-Path -LiteralPath $parent -PathType Container)) { Fail "Environment file parent directory does not exist: $parent" }
@@ -61,9 +75,9 @@ try {
     $status = Invoke-Compose up --detach --wait --wait-timeout 240
     if ($status -ne 0) { Fail 'HosPrime stack did not become healthy.' }
 
-    & (Join-Path $PSScriptRoot 'healthcheck.ps1') -EnvFile $EnvFile -ProjectName $ProjectName
+    & (Join-Path $PSScriptRoot 'healthcheck.ps1') -EnvFile $EnvFile -ProjectName $ProjectName -ExpectedGitSha $SourceSha
     if ($LASTEXITCODE -ne 0) { Fail 'HosPrime health check failed.' }
-    Write-Host "HosPrime local stack is ready (Compose project: $ProjectName)."
+    Write-Host "HosPrime local stack is ready (Compose project: $ProjectName, source commit: $SourceSha)."
 }
 finally {
     Pop-Location

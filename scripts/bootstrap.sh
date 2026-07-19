@@ -19,6 +19,7 @@ Set HOSPRIME_ENV_FILE to an absolute path or a path relative to the caller.
 Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
 The checkout must be a pristine Git commit so runtime evidence is attributable.
 Runtime environment files stored inside the repository must be ignored by Git.
+Runtime environment files are restricted to the current user before Compose runs.
 EOF
       exit 0
       ;;
@@ -48,6 +49,18 @@ PY
     git check-ignore -q -- "$relative_path" || fail "Environment file inside repository must be ignored by Git: $relative_path"
   fi
 }
+protect_env_file() {
+  chmod 600 "$ENV_FILE" || fail "Unable to restrict environment file permissions: $ENV_FILE"
+  python3 - "$ENV_FILE" <<'PY' || fail "Environment file permissions must deny group and other access: $ENV_FILE"
+import os
+import stat
+import sys
+
+mode = stat.S_IMODE(os.stat(sys.argv[1], follow_symlinks=False).st_mode)
+if mode & 0o077:
+    raise SystemExit(1)
+PY
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -74,13 +87,14 @@ export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"
 if [[ ! -e "$ENV_FILE" ]]; then
   [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
   cp .env.example "$ENV_FILE"
-  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  chmod 600 "$ENV_FILE" || fail "Unable to restrict new environment file permissions: $ENV_FILE"
   printf 'Created %s from .env.example. Replace every CHANGE_ME value, then run this command again.\n' "$ENV_FILE"
   exit 2
 fi
 [[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
 [[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
 assert_in_repo_env_is_ignored
+protect_env_file
 
 if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then
   fail "$ENV_FILE still contains CHANGE_ME placeholders"

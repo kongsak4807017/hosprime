@@ -28,13 +28,21 @@ published_port() {
   printf '%s' "$ports"
 }
 container_id() {
-  compose ps -q "$1"
+  local service="$1" ids
+  ids="$(compose ps -q "$service" | tr -d '\r' | awk 'NF' | sort -u)"
+  [[ -n "$ids" ]] || fail "Service container does not exist in Compose project $PROJECT_NAME: $service"
+  [[ "$ids" != *$'\n'* ]] || fail "Expected exactly one container for service $service in Compose project $PROJECT_NAME"
+  [[ "$ids" =~ ^[0-9a-f]{12,64}$ ]] || fail "Unexpected container identifier for service $service"
+  printf '%s' "$ids"
 }
 container_state() {
   docker inspect --format '{{.State.Status}}' "$1"
 }
 container_health() {
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1"
+}
+container_compose_identity() {
+  docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}' "$1"
 }
 http_get() {
   curl \
@@ -70,7 +78,8 @@ compose config --quiet
 
 for service in postgres redis neo4j backend frontend; do
   cid="$(container_id "$service")"
-  [[ -n "$cid" ]] || fail "Service container does not exist in Compose project $PROJECT_NAME: $service"
+  identity="$(container_compose_identity "$cid")"
+  [[ "$identity" == "$PROJECT_NAME|$service" ]] || fail "Container identity mismatch for service $service in Compose project $PROJECT_NAME"
   state="$(container_state "$cid")"
   [[ "$state" == "running" ]] || fail "Service is not running: $service ($state)"
   health="$(container_health "$cid")"

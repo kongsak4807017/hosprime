@@ -44,14 +44,14 @@ def expected_head_from_range(git_range: str) -> str | None:
 def sanitized_git_environment(
     source: Mapping[str, str] | None = None,
 ) -> dict[str, str] | None:
-    """Return an environment that cannot redirect local provenance probes.
+    """Return an environment that cannot redirect Git-backed security work.
 
     Git repository-selection and object-store variables such as ``GIT_DIR``,
     ``GIT_WORK_TREE`` and ``GIT_OBJECT_DIRECTORY`` override ``cwd`` and can make
-    HEAD/status/ancestry probes describe a different repository from the files
-    that the security commands execute. Configuration-injection variables can
-    also alter local Git behavior. The receipt probes require none of these
-    variables, so every inherited ``GIT_*`` key is removed.
+    HEAD/status/ancestry probes or scanner-owned Git commands describe a different
+    repository from the files that the security commands execute. Configuration-
+    injection variables can also alter local Git behavior. The receipt requires
+    none of these variables, so every inherited ``GIT_*`` key is removed.
 
     ``None`` is returned when no sanitization is required so ordinary subprocess
     call signatures remain stable and the child inherits the normal environment.
@@ -176,13 +176,18 @@ def build_commands(git_range: str | None) -> list[list[str]]:
 
 
 def run_commands(commands: Sequence[Sequence[str]]) -> int:
+    """Run every gate with the same repository-selection isolation as provenance probes."""
+
+    environment = sanitized_git_environment()
     for command in commands:
+        kwargs: dict[str, object] = {
+            "cwd": ROOT,
+            "check": False,
+        }
+        if environment is not None:
+            kwargs["env"] = environment
         try:
-            completed = subprocess.run(
-                list(command),
-                cwd=ROOT,
-                check=False,
-            )
+            completed = subprocess.run(list(command), **kwargs)
         except OSError:
             print(GENERIC_FAILURE, file=sys.stderr)
             return 2

@@ -48,6 +48,7 @@ cd "$ROOT_DIR"
 SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source must be a Git checkout"
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve an exact HosPrime source commit"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine before bootstrap"
+export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"
 
 if [[ ! -e "$ENV_FILE" ]]; then
   [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
@@ -68,6 +69,6 @@ if [[ "$SKIP_BUILD" == false ]]; then
   compose build
 fi
 compose up --detach --wait --wait-timeout 240
-HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" HOSPRIME_EXPECTED_GIT_SHA="$SOURCE_SHA" bash "$ROOT_DIR/scripts/healthcheck.sh"
+HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" HOSPRIME_EXPECTED_GIT_SHA="$SOURCE_SHA" HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA" bash "$ROOT_DIR/scripts/healthcheck.sh"
 
 printf 'HosPrime local stack is ready (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"

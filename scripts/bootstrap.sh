@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
 SKIP_BUILD=false
 
 for arg in "$@"; do
@@ -14,6 +15,7 @@ Usage: scripts/bootstrap.sh [--skip-build]
 
 Creates .env from .env.example when missing, validates configuration,
 builds and starts HosPrime, then runs the health check.
+Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
 EOF
       exit 0
       ;;
@@ -23,7 +25,9 @@ done
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
+compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
 
+[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
 require curl
 require python3
@@ -42,11 +46,11 @@ if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 
   fail "$ENV_FILE still contains CHANGE_ME placeholders"
 fi
 
-docker compose --env-file "$ENV_FILE" config --quiet
+compose config --quiet
 if [[ "$SKIP_BUILD" == false ]]; then
-  docker compose --env-file "$ENV_FILE" build
+  compose build
 fi
-docker compose --env-file "$ENV_FILE" up --detach --wait --wait-timeout 240
-HOSPRIME_ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/healthcheck.sh"
+compose up --detach --wait --wait-timeout 240
+HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" bash "$ROOT_DIR/scripts/healthcheck.sh"
 
-printf 'HosPrime local stack is ready.\n'
+printf 'HosPrime local stack is ready (Compose project: %s).\n' "$PROJECT_NAME"

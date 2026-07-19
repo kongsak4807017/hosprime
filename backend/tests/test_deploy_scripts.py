@@ -184,6 +184,30 @@ def test_compose_does_not_use_global_fixed_container_names() -> None:
         assert f"  {service}:" in compose
 
 
+def test_compose_published_ports_bind_to_loopback_by_default() -> None:
+    compose = read("docker-compose.yml")
+    env_example = read(".env.example")
+
+    assert "HOSPRIME_BIND_ADDRESS=127.0.0.1" in env_example
+    assert "Change this only when remote access is intentionally required" in env_example
+
+    expected_mappings = (
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432',
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379',
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${NEO4J_HTTP_PORT:-7474}:7474',
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${NEO4J_BOLT_PORT:-7687}:7687',
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}:8000',
+        '${HOSPRIME_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-80}:80',
+    )
+    for mapping in expected_mappings:
+        assert mapping in compose
+
+    assert '- "${POSTGRES_PORT:-5432}:5432"' not in compose
+    assert '- "${REDIS_PORT:-6379}:6379"' not in compose
+    assert '- "${BACKEND_PORT:-8000}:8000"' not in compose
+    assert '- "${FRONTEND_PORT:-80}:80"' not in compose
+
+
 def test_scripts_do_not_echo_or_generate_credentials() -> None:
     forbidden = (
         "POSTGRES_PASSWORD=",

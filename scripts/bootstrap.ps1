@@ -114,6 +114,11 @@ try {
     Assert-PristineCheckout
     $env:HOSPRIME_BUILD_GIT_SHA = $SourceSha
 
+    # Apply the repository ignore boundary before any new runtime file is
+    # copied. This prevents a custom in-repository path from becoming an
+    # untracked credential-bearing file before the next bootstrap run.
+    Assert-InRepoEnvIsIgnored $EnvFile
+
     if (-not (Test-Path -LiteralPath $EnvFile)) {
         $parent = Split-Path -Parent $EnvFile
         if (-not (Test-Path -LiteralPath $parent -PathType Container)) { Fail "Environment file parent directory does not exist: $parent" }
@@ -123,7 +128,6 @@ try {
         exit 2
     }
     Assert-RegularEnvFile $EnvFile
-    Assert-InRepoEnvIsIgnored $EnvFile
     Protect-EnvFileAcl $EnvFile
 
     $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {

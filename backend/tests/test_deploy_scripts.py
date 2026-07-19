@@ -105,12 +105,12 @@ def test_healthcheck_runtime_port_discovery_fails_closed_on_ambiguous_bindings()
     powershell = read("scripts/healthcheck.ps1")
 
     assert "sort -u" in shell
-    assert '[[ "$ports" != *$\'\\n\'* ]]' in shell
+    assert '[[ "$bindings" != *$\'\\n\'* ]]' in shell
     assert "No published host port" in shell
     assert "Multiple published host ports" in shell
 
     assert "Sort-Object -Unique" in powershell
-    assert "$ports.Count -ne 1" in powershell
+    assert "$bindings.Count -ne 1" in powershell
     assert "Unexpected published-port binding" in powershell
     assert "Expected one published host port" in powershell
 

@@ -2,18 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+ENV_FILE_INPUT="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
 PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
 HTTP_CONNECT_TIMEOUT_SECONDS="${HOSPRIME_HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
 HTTP_MAX_TIME_SECONDS="${HOSPRIME_HTTP_MAX_TIME_SECONDS:-15}"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
-compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
 read_env() {
   local key="$1" default_value="$2" value
-  value="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)"
+  value="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' | xargs || true)"
   printf '%s' "${value:-$default_value}"
+}
+validate_port() {
+  local key="$1" value="$2"
+  [[ "$value" =~ ^[0-9]+$ ]] || fail "$key must be an integer between 1 and 65535"
+  (( value >= 1 && value <= 65535 )) || fail "$key must be between 1 and 65535"
 }
 container_id() {
   compose ps -q "$1"
@@ -38,11 +42,21 @@ http_get() {
 require docker
 require curl
 require python3
-[[ -f "$ENV_FILE" ]] || fail "Environment file not found: $ENV_FILE"
+ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
+import os
+import sys
+print(os.path.abspath(sys.argv[1]))
+PY
+)"
+compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
+[[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
+[[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
 BACKEND_PORT="$(read_env BACKEND_PORT 8000)"
 FRONTEND_PORT="$(read_env FRONTEND_PORT 80)"
+validate_port BACKEND_PORT "$BACKEND_PORT"
+validate_port FRONTEND_PORT "$FRONTEND_PORT"
 BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
 FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}"
 TMP_DIR="$(mktemp -d)"

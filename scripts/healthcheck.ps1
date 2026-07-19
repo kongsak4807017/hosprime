@@ -23,18 +23,30 @@ function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
 }
-function Read-EnvValue([string]$Key, [string]$DefaultValue) {
-    $match = Get-Content -LiteralPath $EnvFile | Where-Object { $_ -match "^\s*$([regex]::Escape($Key))=" } | Select-Object -Last 1
-    if (-not $match) { return $DefaultValue }
-    $value = ($match -split '=', 2)[1].Trim()
-    if ([string]::IsNullOrWhiteSpace($value)) { return $DefaultValue }
-    return $value
-}
 function Assert-Port([string]$Key, [string]$Value) {
     $port = 0
     if (-not [int]::TryParse($Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
         Fail "$Key must be an integer between 1 and 65535."
     }
+}
+function Get-PublishedPort([string]$Service, [int]$ContainerPort) {
+    $bindings = @(& docker compose --project-name $ProjectName --env-file $EnvFile port $Service $ContainerPort)
+    if ($LASTEXITCODE -ne 0) { Fail "Unable to resolve published port for ${Service}:$ContainerPort." }
+
+    $ports = @(
+        $bindings |
+            ForEach-Object {
+                $match = [regex]::Match($_.Trim(), ':(\d+)$')
+                if (-not $match.Success) { Fail "Unexpected published-port binding for ${Service}:$ContainerPort." }
+                $match.Groups[1].Value
+            } |
+            Sort-Object -Unique
+    )
+    if ($ports.Count -ne 1) {
+        Fail "Expected one published host port for ${Service}:$ContainerPort in Compose project $ProjectName."
+    }
+    Assert-Port "${Service}_PUBLISHED_PORT" $ports[0]
+    return $ports[0]
 }
 function Get-ServiceContainerId([string]$Service) {
     $id = [string]::Join('', @(& docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service)).Trim()
@@ -60,13 +72,6 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is r
 & docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 
-$BackendPort = Read-EnvValue 'BACKEND_PORT' '8000'
-$FrontendPort = Read-EnvValue 'FRONTEND_PORT' '80'
-Assert-Port 'BACKEND_PORT' $BackendPort
-Assert-Port 'FRONTEND_PORT' $FrontendPort
-$BackendUrl = "http://127.0.0.1:$BackendPort"
-$FrontendUrl = "http://127.0.0.1:$FrontendPort"
-
 Push-Location $RootDir
 try {
     $status = Invoke-Compose config --quiet
@@ -79,6 +84,11 @@ try {
         $health = Get-ContainerHealth $containerId
         if ($health -ne 'healthy') { Fail "Service is not healthy: $service ($health)" }
     }
+
+    $BackendPort = Get-PublishedPort 'backend' 8000
+    $FrontendPort = Get-PublishedPort 'frontend' 80
+    $BackendUrl = "http://127.0.0.1:$BackendPort"
+    $FrontendUrl = "http://127.0.0.1:$FrontendPort"
 
     $live = Invoke-RestMethod -Uri "$BackendUrl/health/live" -TimeoutSec 15
     $ready = Invoke-RestMethod -Uri "$BackendUrl/health/ready" -TimeoutSec 15

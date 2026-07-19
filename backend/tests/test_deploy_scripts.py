@@ -39,6 +39,27 @@ def test_shell_bootstrap_invokes_healthcheck_through_bash() -> None:
     assert '"$ROOT_DIR/scripts/healthcheck.sh"\n' not in shell
 
 
+def test_all_deploy_commands_bind_to_one_explicit_compose_project() -> None:
+    shell_bootstrap = read("scripts/bootstrap.sh")
+    shell_health = read("scripts/healthcheck.sh")
+    powershell_bootstrap = read("scripts/bootstrap.ps1")
+    powershell_health = read("scripts/healthcheck.ps1")
+
+    for content in (shell_bootstrap, shell_health):
+        assert 'PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"' in content
+        assert 'docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE"' in content
+        assert '^[a-z0-9][a-z0-9_-]*$' in content
+
+    for content in (powershell_bootstrap, powershell_health):
+        assert '[string]$ProjectName = $env:HOSPRIME_COMPOSE_PROJECT_NAME' in content
+        assert "if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }" in content
+        assert 'docker compose --project-name $ProjectName --env-file $EnvFile' in content
+        assert '^[a-z0-9][a-z0-9_-]*$' in content
+
+    assert 'HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" bash' in shell_bootstrap
+    assert "-ProjectName $ProjectName" in powershell_bootstrap
+
+
 def test_healthchecks_verify_all_services_and_public_endpoints() -> None:
     required = ("postgres", "redis", "neo4j", "backend", "frontend")
     for path in ("scripts/healthcheck.sh", "scripts/healthcheck.ps1"):

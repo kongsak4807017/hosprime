@@ -167,12 +167,13 @@ class SecretScanTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "contains NUL bytes"):
                 scanner_module.scan_tracked_files([path])
 
-    def test_oversized_candidate_text_file_fails_closed(self) -> None:
+    def test_oversized_candidate_text_file_fails_closed_without_path_disclosure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "settings.env"
+            path = Path(directory) / "credential-bearing-name.env"
             path.write_bytes(b"x" * (scanner_module.MAX_FILE_BYTES + 1))
-            with self.assertRaisesRegex(RuntimeError, "exceeds .* byte scan limit"):
+            with self.assertRaisesRegex(RuntimeError, "could not be safely read") as raised:
                 scanner_module.scan_tracked_files([path])
+            self.assertNotIn(path.name, str(raised.exception))
 
     def test_deduplicate_returns_deterministic_unique_findings(self) -> None:
         finding = scanner_module.Finding(

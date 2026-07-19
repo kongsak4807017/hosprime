@@ -45,6 +45,18 @@ container_health() {
 container_compose_identity() {
   docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}' "$1"
 }
+container_image_id() {
+  local image_id
+  image_id="$(docker inspect --format '{{.Image}}' "$1")" || fail "Unable to inspect image identity for container $1"
+  [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "Unexpected image identity for container $1"
+  printf '%s' "$image_id"
+}
+image_source_revision() {
+  local image_id="$1" revision
+  revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_id")" || fail "Unable to inspect source revision for image $image_id"
+  [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail "Application image is missing a valid source revision label"
+  printf '%s' "$revision"
+}
 http_get() {
   curl \
     --fail \
@@ -81,6 +93,7 @@ SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve an exact HosPrime source commit"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine for health evidence"
 [[ -z "$EXPECTED_GIT_SHA" || "$SOURCE_SHA" == "$EXPECTED_GIT_SHA" ]] || fail "HosPrime source commit changed between bootstrap and health verification"
+export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"
 compose config --quiet
 
 for service in postgres redis neo4j backend frontend; do
@@ -91,6 +104,11 @@ for service in postgres redis neo4j backend frontend; do
   [[ "$state" == "running" ]] || fail "Service is not running: $service ($state)"
   health="$(container_health "$cid")"
   [[ "$health" == "healthy" ]] || fail "Service is not healthy: $service ($health)"
+  if [[ "$service" == "backend" || "$service" == "frontend" ]]; then
+    image_id="$(container_image_id "$cid")"
+    revision="$(image_source_revision "$image_id")"
+    [[ "$revision" == "$SOURCE_SHA" ]] || fail "Application image source revision mismatch for service $service"
+  fi
 done
 
 BACKEND_PORT="$(published_port backend 8000)"

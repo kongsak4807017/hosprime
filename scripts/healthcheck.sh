@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE_INPUT="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
 PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
+EXPECTED_GIT_SHA="${HOSPRIME_EXPECTED_GIT_SHA:-}"
 HTTP_CONNECT_TIMEOUT_SECONDS="${HOSPRIME_HTTP_CONNECT_TIMEOUT_SECONDS:-5}"
 HTTP_MAX_TIME_SECONDS="${HOSPRIME_HTTP_MAX_TIME_SECONDS:-15}"
 
@@ -55,10 +56,12 @@ http_get() {
 }
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
+[[ -z "$EXPECTED_GIT_SHA" || "$EXPECTED_GIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSPRIME_EXPECTED_GIT_SHA must be a full lowercase commit SHA"
 require docker
 require curl
 require python3
 require awk
+require git
 ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
 import os
 import sys
@@ -74,6 +77,10 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 cd "$ROOT_DIR"
+SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source must be a Git checkout"
+[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve an exact HosPrime source commit"
+[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine for health evidence"
+[[ -z "$EXPECTED_GIT_SHA" || "$SOURCE_SHA" == "$EXPECTED_GIT_SHA" ]] || fail "HosPrime source commit changed between bootstrap and health verification"
 compose config --quiet
 
 for service in postgres redis neo4j backend frontend; do
@@ -111,6 +118,6 @@ if ready.get("database_dialect") != "postgresql":
     raise SystemExit(f"Expected PostgreSQL runtime: {ready}")
 PY
 
-printf 'HosPrime health check passed (Compose project: %s).\n' "$PROJECT_NAME"
+printf 'HosPrime health check passed (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"
 printf 'Backend: %s\nFrontend: %s\n' "$BACKEND_URL" "$FRONTEND_URL"
 compose ps

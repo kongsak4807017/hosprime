@@ -37,16 +37,18 @@ function Assert-Port([string]$Key, [string]$Value) {
     if (-not [int]::TryParse($Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) { Fail "$Key must be an integer between 1 and 65535." }
 }
 function Get-PublishedPort([string]$Service, [int]$ContainerPort) {
-    $bindings = @(& docker compose --project-name $ProjectName --env-file $EnvFile port $Service $ContainerPort)
+    $bindings = @(& docker compose --project-name $ProjectName --env-file $EnvFile port $Service $ContainerPort | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
     if ($LASTEXITCODE -ne 0) { Fail "Unable to resolve published port for ${Service}:$ContainerPort." }
-    $ports = @($bindings | ForEach-Object {
-        $match = [regex]::Match($_.Trim(), ':(\d+)$')
-        if (-not $match.Success) { Fail "Unexpected published-port binding for ${Service}:$ContainerPort." }
-        $match.Groups[1].Value
-    } | Sort-Object -Unique)
-    if ($ports.Count -ne 1) { Fail "Expected one published host port for ${Service}:$ContainerPort in Compose project $ProjectName." }
-    Assert-Port "${Service}_PUBLISHED_PORT" $ports[0]
-    return $ports[0]
+    if ($bindings.Count -eq 0) { Fail "No published host port for ${Service}:$ContainerPort in Compose project $ProjectName." }
+    if ($bindings.Count -ne 1) { Fail "Expected one published host port for ${Service}:$ContainerPort in Compose project $ProjectName." }
+    $match = [regex]::Match($bindings[0], '^127\.0\.0\.1:(\d+)$')
+    if (-not $match.Success) {
+        if ($bindings[0] -notmatch ':\d+$') { Fail "Unexpected published-port binding for ${Service}:$ContainerPort." }
+        Fail "Published binding must use 127.0.0.1 for ${Service}:$ContainerPort in Compose project $ProjectName."
+    }
+    $port = $match.Groups[1].Value
+    Assert-Port "${Service}_PUBLISHED_PORT" $port
+    return $port
 }
 function Get-ServiceContainerId([string]$Service) {
     $ids = @(& docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
@@ -94,6 +96,10 @@ try {
             if ($revision -ne $SourceSha) { Fail "Application image source revision mismatch for service $service" }
         }
     }
+    $PostgresPort = Get-PublishedPort 'postgres' 5432
+    $RedisPort = Get-PublishedPort 'redis' 6379
+    $Neo4jHttpPort = Get-PublishedPort 'neo4j' 7474
+    $Neo4jBoltPort = Get-PublishedPort 'neo4j' 7687
     $BackendPort = Get-PublishedPort 'backend' 8000
     $FrontendPort = Get-PublishedPort 'frontend' 80
     $BackendUrl = "http://127.0.0.1:$BackendPort"
@@ -106,6 +112,7 @@ try {
     if ($ready.database_dialect -ne 'postgresql') { Fail "Expected PostgreSQL runtime; got $($ready.database_dialect)" }
     if ([string]::IsNullOrWhiteSpace($frontend.Content)) { Fail 'Frontend returned an empty response.' }
     Write-Host "HosPrime health check passed (Compose project: $ProjectName, source commit: $SourceSha)."
+    Write-Host "Verified loopback bindings: postgres=$PostgresPort redis=$RedisPort neo4j-http=$Neo4jHttpPort neo4j-bolt=$Neo4jBoltPort backend=$BackendPort frontend=$FrontendPort"
     Write-Host "Backend: $BackendUrl"
     Write-Host "Frontend: $FrontendUrl"
     $status = Invoke-Compose ps

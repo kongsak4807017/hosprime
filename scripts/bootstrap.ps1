@@ -54,12 +54,33 @@ function Protect-EnvFileAcl([string]$Path) {
     }
 
     $effectiveAcl = Get-Acl -LiteralPath $Path
-    $allowedSids = @($currentUserSid.Value, $systemSid.Value, $administratorsSid.Value)
+    if (-not $effectiveAcl.AreAccessRulesProtected) {
+        Fail "Environment file ACL still inherits access rules: $Path"
+    }
+
+    $requiredSidRights = @{
+        $currentUserSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+        $systemSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+        $administratorsSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    $verifiedSids = @{}
+
     foreach ($entry in $effectiveAcl.Access) {
         if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
         $entrySid = $entry.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
-        if ($allowedSids -notcontains $entrySid) {
+        if (-not $requiredSidRights.ContainsKey($entrySid)) {
             Fail "Environment file ACL grants access to an unexpected identity: $Path"
+        }
+        $requiredRights = $requiredSidRights[$entrySid]
+        if (($entry.FileSystemRights -band $requiredRights) -ne $requiredRights) {
+            Fail "Environment file ACL is missing required FullControl for an allowed identity: $Path"
+        }
+        $verifiedSids[$entrySid] = $true
+    }
+
+    foreach ($requiredSid in $requiredSidRights.Keys) {
+        if (-not $verifiedSids.ContainsKey($requiredSid)) {
+            Fail "Environment file ACL is missing required FullControl for an allowed identity: $Path"
         }
     }
 }

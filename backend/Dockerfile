@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+ARG HOSPRIME_GIT_SHA
+LABEL org.opencontainers.image.revision=$HOSPRIME_GIT_SHA
+
 WORKDIR /app
 
 # Install system dependencies required by psycopg2 and native extensions.

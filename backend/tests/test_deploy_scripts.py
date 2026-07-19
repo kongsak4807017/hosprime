@@ -33,6 +33,23 @@ def test_bootstrap_scripts_fail_closed_on_placeholders_and_wait_for_health() -> 
     assert "(^|=)CHANGE_ME" not in powershell
 
 
+def test_bootstrap_rejects_tracked_in_repo_environment_files() -> None:
+    shell = read("scripts/bootstrap.sh")
+    powershell = read("scripts/bootstrap.ps1")
+
+    assert "assert_in_repo_env_is_ignored" in shell
+    assert 'git check-ignore -q -- "$relative_path"' in shell
+    assert "os.path.commonpath((root, path)) == root" in shell
+    assert "Environment file inside repository must be ignored by Git" in shell
+    assert shell.index("assert_in_repo_env_is_ignored") < shell.index("compose config --quiet")
+
+    assert "Assert-InRepoEnvIsIgnored" in powershell
+    assert "StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)" in powershell
+    assert "& git check-ignore -q -- $relativePath" in powershell
+    assert "Environment file inside repository must be ignored by Git" in powershell
+    assert powershell.index("Assert-InRepoEnvIsIgnored $EnvFile") < powershell.index("Invoke-Compose config --quiet")
+
+
 def test_shell_bootstrap_invokes_healthcheck_through_bash() -> None:
     shell = read("scripts/bootstrap.sh")
     assert 'bash "$ROOT_DIR/scripts/healthcheck.sh"' in shell

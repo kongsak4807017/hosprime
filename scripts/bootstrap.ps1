@@ -20,6 +20,14 @@ function Assert-RegularEnvFile([string]$Path) {
     if ($item.PSIsContainer) { Fail "Environment path is not a regular file: $Path" }
     if ($item.LinkType) { Fail "Environment file must not be a symbolic link: $Path" }
 }
+function Assert-InRepoEnvIsIgnored([string]$Path) {
+    $rootPrefix = $RootDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    if ($Path.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $relativePath = $Path.Substring($rootPrefix.Length).Replace('\', '/')
+        & git check-ignore -q -- $relativePath
+        if ($LASTEXITCODE -ne 0) { Fail "Environment file inside repository must be ignored by Git: $relativePath" }
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -58,6 +66,7 @@ try {
         exit 2
     }
     Assert-RegularEnvFile $EnvFile
+    Assert-InRepoEnvIsIgnored $EnvFile
 
     $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {
         $_ -notmatch '^\s*(#|$)' -and $_ -match 'CHANGE_ME'

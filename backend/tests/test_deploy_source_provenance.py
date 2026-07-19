@@ -15,11 +15,13 @@ def test_bootstrap_requires_exact_pristine_git_source() -> None:
     assert "git status --porcelain=v1 --untracked-files=all" in shell
     assert "HosPrime checkout must be pristine before bootstrap" in shell
     assert 'HOSPRIME_EXPECTED_GIT_SHA="$SOURCE_SHA"' in shell
+    assert 'export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"' in shell
 
     assert "git rev-parse --verify HEAD" in powershell
     assert "git status --porcelain=v1 --untracked-files=all" in powershell
     assert "HosPrime checkout must be pristine before bootstrap" in powershell
     assert "-ExpectedGitSha $SourceSha" in powershell
+    assert "$env:HOSPRIME_BUILD_GIT_SHA = $SourceSha" in powershell
 
 
 def test_health_evidence_rejects_source_commit_drift() -> None:
@@ -35,6 +37,29 @@ def test_health_evidence_rejects_source_commit_drift() -> None:
     assert "$SourceSha -ne $ExpectedGitSha" in powershell
     assert "HosPrime checkout must be pristine for health evidence" in powershell
     assert "source commit: $SourceSha" in powershell
+
+
+def test_application_images_are_stamped_and_verified_against_source() -> None:
+    compose = read("docker-compose.yml")
+    backend_dockerfile = read("backend/Dockerfile")
+    frontend_dockerfile = read("frontend/Dockerfile")
+    shell = read("scripts/healthcheck.sh")
+    powershell = read("scripts/healthcheck.ps1")
+
+    assert compose.count("HOSPRIME_GIT_SHA: ${HOSPRIME_BUILD_GIT_SHA:?") == 2
+    for dockerfile in (backend_dockerfile, frontend_dockerfile):
+        assert "ARG HOSPRIME_GIT_SHA" in dockerfile
+        assert "LABEL org.opencontainers.image.revision=$HOSPRIME_GIT_SHA" in dockerfile
+
+    assert "container_image_id()" in shell
+    assert "image_source_revision()" in shell
+    assert '[[ "$revision" == "$SOURCE_SHA" ]]' in shell
+    assert "org.opencontainers.image.revision" in shell
+
+    assert "Get-ContainerImageId" in powershell
+    assert "Get-ImageSourceRevision" in powershell
+    assert "$revision -ne $SourceSha" in powershell
+    assert "org.opencontainers.image.revision" in powershell
 
 
 def test_source_provenance_does_not_print_environment_values() -> None:

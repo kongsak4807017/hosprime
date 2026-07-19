@@ -33,6 +33,18 @@ class SecretScanTests(unittest.TestCase):
         self.assertTrue(any(item.rule == "private-key" for item in findings))
         self.assertTrue(all(item.redacted == "<redacted>" for item in findings))
 
+    def test_encrypted_private_key_header_is_detected_in_ordinary_text(self) -> None:
+        header = "-----BEGIN " + "ENCRYPTED PRIVATE KEY-----"
+        findings = scanner_module.scan_text(
+            "notes.md", "\n".join(("diagnostic excerpt", header, "synthetic-fixture"))
+        )
+
+        encrypted = [item for item in findings if item.rule == "encrypted-private-key"]
+        self.assertEqual(len(encrypted), 1)
+        self.assertEqual(encrypted[0].line, 2)
+        self.assertEqual(encrypted[0].redacted, "<redacted>")
+        self.assertNotIn("ENCRYPTED", encrypted[0].redacted)
+
     def test_literal_credential_assignment_is_detected(self) -> None:
         name = "admin_" + "password"
         value = "Correct" + "Horse" + "Battery" + "Staple"

@@ -9,15 +9,23 @@ HTTP_MAX_TIME_SECONDS="${HOSPRIME_HTTP_MAX_TIME_SECONDS:-15}"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
-read_env() {
-  local key="$1" default_value="$2" value
-  value="$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' | xargs || true)"
-  printf '%s' "${value:-$default_value}"
-}
 validate_port() {
   local key="$1" value="$2"
   [[ "$value" =~ ^[0-9]+$ ]] || fail "$key must be an integer between 1 and 65535"
   (( 10#$value >= 1 && 10#$value <= 65535 )) || fail "$key must be between 1 and 65535"
+}
+published_port() {
+  local service="$1" container_port="$2" ports
+  ports="$(
+    compose port "$service" "$container_port" \
+      | tr -d '\r' \
+      | awk -F: 'NF { print $NF }' \
+      | sort -u
+  )"
+  [[ -n "$ports" ]] || fail "No published host port for $service:$container_port in Compose project $PROJECT_NAME"
+  [[ "$ports" != *$'\n'* ]] || fail "Multiple published host ports for $service:$container_port in Compose project $PROJECT_NAME"
+  validate_port "${service^^}_PUBLISHED_PORT" "$ports"
+  printf '%s' "$ports"
 }
 container_id() {
   compose ps -q "$1"
@@ -42,6 +50,7 @@ http_get() {
 require docker
 require curl
 require python3
+require awk
 ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
 import os
 import sys
@@ -53,12 +62,6 @@ compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE"
 [[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
-BACKEND_PORT="$(read_env BACKEND_PORT 8000)"
-FRONTEND_PORT="$(read_env FRONTEND_PORT 80)"
-validate_port BACKEND_PORT "$BACKEND_PORT"
-validate_port FRONTEND_PORT "$FRONTEND_PORT"
-BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
-FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -73,6 +76,11 @@ for service in postgres redis neo4j backend frontend; do
   health="$(container_health "$cid")"
   [[ "$health" == "healthy" ]] || fail "Service is not healthy: $service ($health)"
 done
+
+BACKEND_PORT="$(published_port backend 8000)"
+FRONTEND_PORT="$(published_port frontend 80)"
+BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
+FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}"
 
 http_get "$BACKEND_URL/health/live" > "$TMP_DIR/live.json"
 http_get "$BACKEND_URL/health/ready" > "$TMP_DIR/ready.json"

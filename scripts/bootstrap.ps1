@@ -1,15 +1,22 @@
 [CmdletBinding()]
 param(
     [switch]$SkipBuild,
-    [string]$EnvFile = $env:HOSPRIME_ENV_FILE
+    [string]$EnvFile = $env:HOSPRIME_ENV_FILE,
+    [string]$ProjectName = $env:HOSPRIME_COMPOSE_PROJECT_NAME
 )
 
 $ErrorActionPreference = 'Stop'
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir '.env' }
+if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }
 
 function Fail([string]$Message) { throw $Message }
+function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
+    & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
+    return $LASTEXITCODE
+}
 
+if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
 & docker info *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker daemon is not available.' }
@@ -31,20 +38,20 @@ try {
         Fail "$EnvFile still contains CHANGE_ME placeholders."
     }
 
-    & docker compose --env-file $EnvFile config --quiet
-    if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose configuration validation failed.' }
+    $status = Invoke-Compose config --quiet
+    if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 
     if (-not $SkipBuild) {
-        & docker compose --env-file $EnvFile build
-        if ($LASTEXITCODE -ne 0) { Fail 'Docker image build failed.' }
+        $status = Invoke-Compose build
+        if ($status -ne 0) { Fail 'Docker image build failed.' }
     }
 
-    & docker compose --env-file $EnvFile up --detach --wait --wait-timeout 240
-    if ($LASTEXITCODE -ne 0) { Fail 'HosPrime stack did not become healthy.' }
+    $status = Invoke-Compose up --detach --wait --wait-timeout 240
+    if ($status -ne 0) { Fail 'HosPrime stack did not become healthy.' }
 
-    & (Join-Path $PSScriptRoot 'healthcheck.ps1') -EnvFile $EnvFile
+    & (Join-Path $PSScriptRoot 'healthcheck.ps1') -EnvFile $EnvFile -ProjectName $ProjectName
     if ($LASTEXITCODE -ne 0) { Fail 'HosPrime health check failed.' }
-    Write-Host 'HosPrime local stack is ready.'
+    Write-Host "HosPrime local stack is ready (Compose project: $ProjectName)."
 }
 finally {
     Pop-Location

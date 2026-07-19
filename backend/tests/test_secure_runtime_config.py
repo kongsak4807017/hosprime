@@ -108,6 +108,29 @@ def test_compose_uses_required_environment_substitution() -> None:
         assert literal not in lowered
 
 
+def test_ci_runtime_credentials_are_generated_per_run() -> None:
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "m0-secure-runtime-test.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "import secrets" in workflow
+    assert "secrets.token_urlsafe(32)" in workflow
+    assert "secrets.token_urlsafe(48)" in workflow
+    assert 'quote(postgres_password, safe="")' in workflow
+    assert 'Path(".env").write_text' in workflow
+    assert "chmod 600 .env" in workflow
+
+    forbidden_fixed_credentials = (
+        "ci-postgres-password-not-for-production",
+        "ci-neo4j-password-not-for-production",
+        "ci-provider-key-not-for-production",
+        "ci-only-jwt-secret-with-more-than-thirty-two-characters",
+        "ci-admin-password-not-for-production",
+    )
+    for credential in forbidden_fixed_credentials:
+        assert credential not in workflow
+
+
 def test_compose_requires_frontend_health_before_readiness() -> None:
     compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     frontend = compose.split("\n  frontend:\n", 1)[1].split("\nvolumes:\n", 1)[0]

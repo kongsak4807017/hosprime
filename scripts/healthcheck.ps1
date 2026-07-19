@@ -59,6 +59,8 @@ function Get-ServiceContainerId([string]$Service) {
 function Get-ContainerState([string]$ContainerId) { $v=[string]::Join('',@(& docker inspect --format '{{.State.Status}}' $ContainerId)).Trim(); if($LASTEXITCODE-ne 0){Fail "Unable to inspect container state: $ContainerId"}; return $v }
 function Get-ContainerHealth([string]$ContainerId) { $v=[string]::Join('',@(& docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $ContainerId)).Trim(); if($LASTEXITCODE-ne 0){Fail "Unable to inspect container health: $ContainerId"}; return $v }
 function Get-ContainerComposeIdentity([string]$ContainerId) { $v=[string]::Join('',@(& docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}' $ContainerId)).Trim(); if($LASTEXITCODE-ne 0){Fail "Unable to inspect Compose identity: $ContainerId"}; return $v }
+function Get-ContainerImageId([string]$ContainerId) { $v=[string]::Join('',@(& docker inspect --format '{{.Image}}' $ContainerId)).Trim(); if($LASTEXITCODE-ne 0 -or $v -notmatch '^sha256:[0-9a-f]{64}$'){Fail "Unable to resolve a valid image identity for container $ContainerId"}; return $v }
+function Get-ImageSourceRevision([string]$ImageId) { $v=[string]::Join('',@(& docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $ImageId)).Trim(); if($LASTEXITCODE-ne 0 -or $v -notmatch '^[0-9a-f]{40}$'){Fail "Application image is missing a valid source revision label"}; return $v }
 
 if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
 if (-not [string]::IsNullOrWhiteSpace($ExpectedGitSha) -and $ExpectedGitSha -notmatch '^[0-9a-f]{40}$') { Fail 'ExpectedGitSha must be a full lowercase commit SHA.' }
@@ -69,11 +71,13 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Fail 'Git is require
 & docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 
+$PreviousBuildGitSha = $env:HOSPRIME_BUILD_GIT_SHA
 Push-Location $RootDir
 try {
     $SourceSha = Get-ExactSourceSha
     Assert-PristineCheckout
     if (-not [string]::IsNullOrWhiteSpace($ExpectedGitSha) -and $SourceSha -ne $ExpectedGitSha) { Fail 'HosPrime source commit changed between bootstrap and health verification.' }
+    $env:HOSPRIME_BUILD_GIT_SHA = $SourceSha
     $status = Invoke-Compose config --quiet
     if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
     foreach ($service in @('postgres', 'redis', 'neo4j', 'backend', 'frontend')) {
@@ -84,6 +88,11 @@ try {
         if ($state -ne 'running') { Fail "Service is not running: $service ($state)" }
         $health = Get-ContainerHealth $containerId
         if ($health -ne 'healthy') { Fail "Service is not healthy: $service ($health)" }
+        if ($service -in @('backend', 'frontend')) {
+            $imageId = Get-ContainerImageId $containerId
+            $revision = Get-ImageSourceRevision $imageId
+            if ($revision -ne $SourceSha) { Fail "Application image source revision mismatch for service $service" }
+        }
     }
     $BackendPort = Get-PublishedPort 'backend' 8000
     $FrontendPort = Get-PublishedPort 'frontend' 80
@@ -102,4 +111,7 @@ try {
     $status = Invoke-Compose ps
     if ($status -ne 0) { Fail 'Unable to record Compose service state.' }
 }
-finally { Pop-Location }
+finally {
+    $env:HOSPRIME_BUILD_GIT_SHA = $PreviousBuildGitSha
+    Pop-Location
+}

@@ -28,6 +28,41 @@ function Assert-InRepoEnvIsIgnored([string]$Path) {
         if ($LASTEXITCODE -ne 0) { Fail "Environment file inside repository must be ignored by Git: $relativePath" }
     }
 }
+function Protect-EnvFileAcl([string]$Path) {
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) { return }
+
+    $currentUserSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $systemSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
+    $administratorsSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true, $false)
+
+    foreach ($sid in @($currentUserSid, $systemSid, $administratorsSid)) {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $sid,
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        [void]$acl.AddAccessRule($rule)
+    }
+
+    try {
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    }
+    catch {
+        Fail "Unable to restrict environment file ACL: $Path"
+    }
+
+    $effectiveAcl = Get-Acl -LiteralPath $Path
+    $allowedSids = @($currentUserSid.Value, $systemSid.Value, $administratorsSid.Value)
+    foreach ($entry in $effectiveAcl.Access) {
+        if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        $entrySid = $entry.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        if ($allowedSids -notcontains $entrySid) {
+            Fail "Environment file ACL grants access to an unexpected identity: $Path"
+        }
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -62,11 +97,13 @@ try {
         $parent = Split-Path -Parent $EnvFile
         if (-not (Test-Path -LiteralPath $parent -PathType Container)) { Fail "Environment file parent directory does not exist: $parent" }
         Copy-Item -LiteralPath (Join-Path $RootDir '.env.example') -Destination $EnvFile
+        Protect-EnvFileAcl $EnvFile
         Write-Host "Created $EnvFile from .env.example. Replace every CHANGE_ME value, then run this command again."
         exit 2
     }
     Assert-RegularEnvFile $EnvFile
     Assert-InRepoEnvIsIgnored $EnvFile
+    Protect-EnvFileAcl $EnvFile
 
     $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {
         $_ -notmatch '^\s*(#|$)' -and $_ -match 'CHANGE_ME'

@@ -35,6 +35,7 @@ class Finding:
 
 
 HIGH_CONFIDENCE_RULES: tuple[Rule, ...] = (
+    Rule("encrypted-private-key", re.compile(r"-----BEGIN ENCRYPTED PRIVATE KEY-----")),
     Rule("private-key", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")),
     Rule("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b")),
     Rule("openai-key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),

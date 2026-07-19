@@ -18,6 +18,7 @@ builds and starts HosPrime, then runs the health check.
 Set HOSPRIME_ENV_FILE to an absolute path or a path relative to the caller.
 Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
 The checkout must be a pristine Git commit so runtime evidence is attributable.
+Runtime environment files stored inside the repository must be ignored by Git.
 EOF
       exit 0
       ;;
@@ -27,6 +28,26 @@ done
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
+assert_in_repo_env_is_ignored() {
+  local relative_path
+  if relative_path="$(python3 - "$ROOT_DIR" "$ENV_FILE" <<'PY'
+import os
+import sys
+
+root = os.path.realpath(sys.argv[1])
+path = os.path.realpath(sys.argv[2])
+try:
+    inside = os.path.commonpath((root, path)) == root
+except ValueError:
+    inside = False
+if not inside:
+    raise SystemExit(1)
+print(os.path.relpath(path, root).replace(os.sep, "/"))
+PY
+  )"; then
+    git check-ignore -q -- "$relative_path" || fail "Environment file inside repository must be ignored by Git: $relative_path"
+  fi
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -59,6 +80,7 @@ if [[ ! -e "$ENV_FILE" ]]; then
 fi
 [[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
 [[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
+assert_in_repo_env_is_ignored
 
 if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then
   fail "$ENV_FILE still contains CHANGE_ME placeholders"

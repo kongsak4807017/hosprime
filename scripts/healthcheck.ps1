@@ -7,9 +7,18 @@ param(
 $ErrorActionPreference = 'Stop'
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir '.env' }
+if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
+    $EnvFile = Join-Path (Get-Location).Path $EnvFile
+}
+$EnvFile = [System.IO.Path]::GetFullPath($EnvFile)
 if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }
 
 function Fail([string]$Message) { throw $Message }
+function Assert-RegularEnvFile([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer) { Fail "Environment path is not a regular file: $Path" }
+    if ($item.LinkType) { Fail "Environment file must not be a symbolic link: $Path" }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -20,6 +29,12 @@ function Read-EnvValue([string]$Key, [string]$DefaultValue) {
     $value = ($match -split '=', 2)[1].Trim()
     if ([string]::IsNullOrWhiteSpace($value)) { return $DefaultValue }
     return $value
+}
+function Assert-Port([string]$Key, [string]$Value) {
+    $port = 0
+    if (-not [int]::TryParse($Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
+        Fail "$Key must be an integer between 1 and 65535."
+    }
 }
 function Get-ServiceContainerId([string]$Service) {
     $id = [string]::Join('', @(& docker compose --project-name $ProjectName --env-file $EnvFile ps -q $Service)).Trim()
@@ -39,13 +54,16 @@ function Get-ContainerHealth([string]$ContainerId) {
 }
 
 if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
-if (-not (Test-Path -LiteralPath $EnvFile)) { Fail "Environment file not found: $EnvFile" }
+if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) { Fail "Environment path is not a regular file: $EnvFile" }
+Assert-RegularEnvFile $EnvFile
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
 & docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
 
 $BackendPort = Read-EnvValue 'BACKEND_PORT' '8000'
 $FrontendPort = Read-EnvValue 'FRONTEND_PORT' '80'
+Assert-Port 'BACKEND_PORT' $BackendPort
+Assert-Port 'FRONTEND_PORT' $FrontendPort
 $BackendUrl = "http://127.0.0.1:$BackendPort"
 $FrontendUrl = "http://127.0.0.1:$FrontendPort"
 

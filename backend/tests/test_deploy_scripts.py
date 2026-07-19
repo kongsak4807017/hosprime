@@ -82,6 +82,13 @@ def test_shell_http_probes_have_bounded_timeouts() -> None:
     assert "HOSPRIME_HTTP_MAX_TIME_SECONDS" in shell
 
 
+def test_compose_does_not_use_global_fixed_container_names() -> None:
+    compose = read("docker-compose.yml")
+    assert "container_name:" not in compose
+    for service in ("postgres", "redis", "neo4j", "backend", "frontend"):
+        assert f"  {service}:" in compose
+
+
 def test_scripts_do_not_echo_or_generate_credentials() -> None:
     forbidden = (
         "POSTGRES_PASSWORD=",

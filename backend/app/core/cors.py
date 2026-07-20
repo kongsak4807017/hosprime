@@ -55,6 +55,8 @@ def validate_local_m0_cors_origins(
     The browser origin must match the actual published frontend port. Wildcards,
     credentials, paths, query strings, fragments, HTTPS, and non-loopback hosts
     are rejected so a healthy backend cannot mask an unusable or overexposed UI.
+    Multiple textual spellings of the same effective origin are rejected as
+    duplicates so the configured allow-list has one unambiguous representation.
     """
 
     origins = _parse_origins(raw_value)
@@ -80,7 +82,10 @@ def validate_local_m0_cors_origins(
             raise CorsConfigurationError("CORS origin is outside the local M0 boundary")
 
         effective_port = parsed_port if parsed_port is not None else 80
-        normalized.add(_canonical_local_origin(parsed.hostname, effective_port))
+        canonical_origin = _canonical_local_origin(parsed.hostname, effective_port)
+        if canonical_origin in normalized:
+            raise CorsConfigurationError("CORS origins must not contain equivalent duplicates")
+        normalized.add(canonical_origin)
 
     if normalized != expected:
         raise CorsConfigurationError(

@@ -102,6 +102,46 @@ for key in ("DATABASE_URL", "POSTGRES_URL"):
         raise SystemExit(1)
 PY
 }
+validate_redis_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Redis environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+redis_url = values.get("REDIS_URL", "")
+if not redis_url:
+    raise SystemExit(1)
+
+try:
+    parsed = urlsplit(redis_url)
+    internal_port = parsed.port
+except ValueError:
+    raise SystemExit(1)
+if (
+    parsed.scheme != "redis"
+    or parsed.hostname != "redis"
+    or internal_port != 6379
+    or parsed.username is not None
+    or parsed.password is not None
+    or parsed.path != "/0"
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(1)
+PY
+}
 validate_neo4j_configuration() {
   python3 - "$ENV_FILE" <<'PY' || fail "Neo4j environment values are missing, malformed, or inconsistent"
 import sys
@@ -254,6 +294,7 @@ if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 
 fi
 
 validate_postgres_configuration
+validate_redis_configuration
 validate_neo4j_configuration
 validate_published_port_configuration
 validate_bind_address_configuration

@@ -115,10 +115,10 @@ def test_local_m0_compose_allows_missing_external_provider_key() -> None:
     assert "${GEMINI_API_KEY:?" not in compose
     assert "GEMINI_API_KEY=\n" in env_example
     assert "Optional for the local M0 developer preview" in env_example
-    assert make_settings(GEMINI_API_KEY="").fatal_configuration_issues() == []
-    assert "GEMINI_API_KEY is not configured" in make_settings(
-        GEMINI_API_KEY=""
-    ).security_warnings()
+    provider_free = make_settings(GEMINI_API_KEY="")
+    assert provider_free.fatal_configuration_issues() == []
+    assert "GEMINI_API_KEY is not configured" not in provider_free.security_warnings()
+    assert "External AI provider is not configured" in provider_free.capability_warnings()
 
 
 def test_ci_runtime_credentials_are_generated_per_run() -> None:

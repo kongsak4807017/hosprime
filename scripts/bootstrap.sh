@@ -187,6 +187,29 @@ if len(set(ports)) != len(ports):
     raise SystemExit(1)
 PY
 }
+validate_bind_address_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview"
+import sys
+
+value = None
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.rstrip("\r\n")
+        if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        key, candidate = line.split("=", 1)
+        if key.strip() != "HOSPRIME_BIND_ADDRESS":
+            continue
+        if candidate != candidate.strip():
+            raise SystemExit(1)
+        if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {"'", '"'}:
+            candidate = candidate[1:-1]
+        value = candidate
+
+if value != "127.0.0.1":
+    raise SystemExit(1)
+PY
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -233,6 +256,7 @@ fi
 validate_postgres_configuration
 validate_neo4j_configuration
 validate_published_port_configuration
+validate_bind_address_configuration
 compose config --quiet
 if [[ "$SKIP_BUILD" == false ]]; then
   compose build

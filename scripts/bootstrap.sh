@@ -95,6 +95,49 @@ for key in ("DATABASE_URL", "POSTGRES_URL"):
         raise SystemExit(1)
 PY
 }
+validate_neo4j_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Neo4j environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+required = ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD")
+if any(not values.get(key) for key in required):
+    raise SystemExit(1)
+
+try:
+    expected_port = int(values.get("NEO4J_BOLT_PORT", "7687"))
+except ValueError:
+    raise SystemExit(1)
+if not 1 <= expected_port <= 65535:
+    raise SystemExit(1)
+
+parsed = urlsplit(values["NEO4J_URI"])
+if (
+    parsed.scheme not in {"bolt", "neo4j"}
+    or parsed.hostname != "neo4j"
+    or parsed.port != expected_port
+    or parsed.username is not None
+    or parsed.password is not None
+    or parsed.path not in {"", "/"}
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(1)
+PY
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -139,6 +182,7 @@ if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 
 fi
 
 validate_postgres_configuration
+validate_neo4j_configuration
 compose config --quiet
 if [[ "$SKIP_BUILD" == false ]]; then
   compose build

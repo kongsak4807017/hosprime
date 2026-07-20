@@ -152,7 +152,7 @@ def test_shell_accepts_six_unique_published_ports_and_reaches_compose(tmp_path: 
     assert "up --detach --wait --wait-timeout 240" in log
 
 
-def test_powershell_enforces_port_validation_before_compose() -> None:
+def test_powershell_enforces_network_validation_before_compose() -> None:
     source = POWERSHELL.read_text(encoding="utf-8")
 
     assert "function Assert-PublishedPortConfiguration" in source
@@ -163,6 +163,8 @@ def test_powershell_enforces_port_validation_before_compose() -> None:
     assert "BACKEND_PORT" in source
     assert "FRONTEND_PORT" in source
     assert "Published port values are missing, malformed, or duplicated." in source
-    assert source.index("Assert-PublishedPortConfiguration $EnvFile") < source.index(
-        "$status = Invoke-Compose config --quiet"
-    )
+    assert "function Assert-BindAddressConfiguration" in source
+    assert "HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview." in source
+    compose_index = source.index("$status = Invoke-Compose config --quiet")
+    assert source.index("Assert-PublishedPortConfiguration $EnvFile") < compose_index
+    assert source.index("Assert-BindAddressConfiguration $EnvFile") < compose_index

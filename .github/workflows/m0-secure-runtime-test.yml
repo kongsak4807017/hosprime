@@ -103,7 +103,6 @@ jobs:
 
           postgres_password = secrets.token_urlsafe(32)
           neo4j_password = secrets.token_urlsafe(32)
-          provider_key = f"ci-{secrets.token_urlsafe(32)}"
           jwt_secret = secrets.token_urlsafe(48)
           admin_password = secrets.token_urlsafe(32)
           encoded_postgres_password = quote(postgres_password, safe="")
@@ -123,7 +122,7 @@ jobs:
               "NEO4J_PASSWORD": neo4j_password,
               "NEO4J_HTTP_PORT": "17474",
               "NEO4J_BOLT_PORT": "17687",
-              "GEMINI_API_KEY": provider_key,
+              "GEMINI_API_KEY": "",
               "JWT_SECRET": jwt_secret,
               "BOOTSTRAP_ADMIN_USERNAME": "ci-admin",
               "BOOTSTRAP_ADMIN_PASSWORD": admin_password,

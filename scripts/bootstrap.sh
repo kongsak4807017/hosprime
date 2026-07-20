@@ -149,6 +149,44 @@ if (
     raise SystemExit(1)
 PY
 }
+validate_published_port_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Published port values are missing, malformed, or duplicated"
+import sys
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+port_defaults = {
+    "POSTGRES_PORT": "5432",
+    "REDIS_PORT": "6379",
+    "NEO4J_HTTP_PORT": "7474",
+    "NEO4J_BOLT_PORT": "7687",
+    "BACKEND_PORT": "8000",
+    "FRONTEND_PORT": "80",
+}
+ports = []
+for key, default in port_defaults.items():
+    raw_value = values.get(key, default)
+    if not raw_value or not raw_value.isascii() or not raw_value.isdecimal():
+        raise SystemExit(1)
+    port = int(raw_value)
+    if not 1 <= port <= 65535:
+        raise SystemExit(1)
+    ports.append(port)
+if len(set(ports)) != len(ports):
+    raise SystemExit(1)
+PY
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -194,6 +232,7 @@ fi
 
 validate_postgres_configuration
 validate_neo4j_configuration
+validate_published_port_configuration
 compose config --quiet
 if [[ "$SKIP_BUILD" == false ]]; then
   compose build

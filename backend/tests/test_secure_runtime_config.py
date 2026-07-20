@@ -132,6 +132,8 @@ def test_ci_runtime_credentials_are_generated_per_run() -> None:
     assert 'quote(postgres_password, safe="")' in workflow
     assert 'Path(".env").write_text' in workflow
     assert "chmod 600 .env" in workflow
+    assert '"GEMINI_API_KEY": ""' in workflow
+    assert "provider_key =" not in workflow
 
     forbidden_fixed_credentials = (
         "ci-postgres-password-not-for-production",

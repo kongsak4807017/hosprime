@@ -124,6 +124,24 @@ def test_shell_rejects_invalid_or_duplicate_published_ports_before_compose(
     assert "synthetic-graph-password" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    "bind_address",
+    ["", "0.0.0.0", "::", "localhost", "127.0.0.2", " 127.0.0.1 "],
+)
+def test_shell_rejects_noncanonical_or_nonloopback_bind_address_before_compose(
+    tmp_path: Path, bind_address: str
+) -> None:
+    repo, docker_log = _prepare_fixture(tmp_path, {"HOSPRIME_BIND_ADDRESS": bind_address})
+    result = _run(repo, docker_log)
+
+    assert result.returncode == 1
+    assert "HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview" in result.stderr
+    assert "config --quiet" not in docker_log.read_text(encoding="utf-8")
+    assert bind_address.strip() not in result.stderr
+    assert "synthetic-db-password" not in result.stderr
+    assert "synthetic-graph-password" not in result.stderr
+
+
 def test_shell_accepts_six_unique_published_ports_and_reaches_compose(tmp_path: Path) -> None:
     repo, docker_log = _prepare_fixture(tmp_path, {})
     result = _run(repo, docker_log)

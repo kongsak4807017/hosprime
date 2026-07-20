@@ -42,6 +42,19 @@ def test_custom_frontend_port_requires_both_matching_loopback_origins() -> None:
         ('["http://localhost?token=value","http://127.0.0.1"]', 80),
         ('["http://localhost#fragment","http://127.0.0.1"]', 80),
         ('["http://localhost","http://localhost"]', 80),
+        (
+            '["http://localhost","http://localhost:80","http://127.0.0.1"]',
+            80,
+        ),
+        (
+            '["http://localhost","http://localhost/","http://127.0.0.1"]',
+            80,
+        ),
+        (
+            '["http://localhost:18080","http://localhost:18080/",'
+            '"http://127.0.0.1:18080"]',
+            18080,
+        ),
     ),
 )
 def test_unsafe_or_inconsistent_origins_are_rejected(

@@ -19,6 +19,9 @@ def _prepare_fixture(tmp_path: Path, overrides: dict[str, str]) -> tuple[Path, P
     (repo / "scripts").mkdir(parents=True)
     shutil.copy2(BOOTSTRAP, repo / "scripts" / "bootstrap.sh")
     shutil.copy2(ENV_EXAMPLE, repo / ".env.example")
+    healthcheck = repo / "scripts" / "healthcheck.sh"
+    healthcheck.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    healthcheck.chmod(0o755)
     (repo / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
     (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
 

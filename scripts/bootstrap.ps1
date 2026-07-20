@@ -130,6 +130,37 @@ function Assert-PostgresConfiguration([string]$Path) {
         }
     }
 }
+function Assert-Neo4jConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    foreach ($key in @('NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD')) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    $boltPort = 7687
+    if ($values.ContainsKey('NEO4J_BOLT_PORT')) {
+        if (-not [int]::TryParse([string]$values['NEO4J_BOLT_PORT'], [ref]$boltPort) -or $boltPort -lt 1 -or $boltPort -gt 65535) {
+            Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate([string]$values['NEO4J_URI'], [System.UriKind]::Absolute, [ref]$uri)) {
+        Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+    }
+    if (
+        $uri.Scheme -notin @('bolt', 'neo4j') -or
+        $uri.Host -ne 'neo4j' -or
+        $uri.Port -ne $boltPort -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo) -or
+        $uri.AbsolutePath -notin @('', '/') -or
+        -not [string]::IsNullOrEmpty($uri.Query) -or
+        -not [string]::IsNullOrEmpty($uri.Fragment)
+    ) {
+        Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -184,6 +215,7 @@ try {
     }
 
     Assert-PostgresConfiguration $EnvFile
+    Assert-Neo4jConfiguration $EnvFile
     $status = Invoke-Compose config --quiet
     if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 

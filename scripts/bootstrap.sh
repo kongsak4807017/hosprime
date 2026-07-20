@@ -118,17 +118,17 @@ if any(not values.get(key) for key in required):
     raise SystemExit(1)
 
 try:
-    expected_port = int(values.get("NEO4J_BOLT_PORT", "7687"))
+    published_port = int(values.get("NEO4J_BOLT_PORT", "7687"))
 except ValueError:
     raise SystemExit(1)
-if not 1 <= expected_port <= 65535:
+if not 1 <= published_port <= 65535:
     raise SystemExit(1)
 
 parsed = urlsplit(values["NEO4J_URI"])
 if (
     parsed.scheme not in {"bolt", "neo4j"}
     or parsed.hostname != "neo4j"
-    or parsed.port != expected_port
+    or parsed.port != 7687
     or parsed.username is not None
     or parsed.password is not None
     or parsed.path not in {"", "/"}

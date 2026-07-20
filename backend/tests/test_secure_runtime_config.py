@@ -88,7 +88,6 @@ def test_compose_uses_required_environment_substitution() -> None:
         "DATABASE_URL",
         "POSTGRES_URL",
         "NEO4J_PASSWORD",
-        "GEMINI_API_KEY",
         "JWT_SECRET",
         "BOOTSTRAP_ADMIN_USERNAME",
         "BOOTSTRAP_ADMIN_PASSWORD",
@@ -106,6 +105,20 @@ def test_compose_uses_required_environment_substitution() -> None:
     lowered = compose.lower()
     for literal in forbidden_literals:
         assert literal not in lowered
+
+
+def test_local_m0_compose_allows_missing_external_provider_key() -> None:
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    env_example = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
+
+    assert "GEMINI_API_KEY: ${GEMINI_API_KEY:-}" in compose
+    assert "${GEMINI_API_KEY:?" not in compose
+    assert "GEMINI_API_KEY=\n" in env_example
+    assert "Optional for the local M0 developer preview" in env_example
+    assert make_settings(GEMINI_API_KEY="").fatal_configuration_issues() == []
+    assert "GEMINI_API_KEY is not configured" in make_settings(
+        GEMINI_API_KEY=""
+    ).security_warnings()
 
 
 def test_ci_runtime_credentials_are_generated_per_run() -> None:

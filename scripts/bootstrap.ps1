@@ -138,9 +138,9 @@ function Assert-Neo4jConfiguration([string]$Path) {
         }
     }
 
-    $boltPort = 7687
+    $publishedBoltPort = 7687
     if ($values.ContainsKey('NEO4J_BOLT_PORT')) {
-        if (-not [int]::TryParse([string]$values['NEO4J_BOLT_PORT'], [ref]$boltPort) -or $boltPort -lt 1 -or $boltPort -gt 65535) {
+        if (-not [int]::TryParse([string]$values['NEO4J_BOLT_PORT'], [ref]$publishedBoltPort) -or $publishedBoltPort -lt 1 -or $publishedBoltPort -gt 65535) {
             Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
         }
     }
@@ -152,7 +152,7 @@ function Assert-Neo4jConfiguration([string]$Path) {
     if (
         $uri.Scheme -notin @('bolt', 'neo4j') -or
         $uri.Host -ne 'neo4j' -or
-        $uri.Port -ne $boltPort -or
+        $uri.Port -ne 7687 -or
         -not [string]::IsNullOrEmpty($uri.UserInfo) -or
         $uri.AbsolutePath -notin @('', '/') -or
         -not [string]::IsNullOrEmpty($uri.Query) -or

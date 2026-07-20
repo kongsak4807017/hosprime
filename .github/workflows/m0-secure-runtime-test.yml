@@ -14,6 +14,7 @@ on:
       - "backend/Dockerfile"
       - "backend/requirements.txt"
       - "backend/app/core/config.py"
+      - "backend/app/core/cors.py"
       - "backend/app/db/bootstrap.py"
       - "backend/app/db/safe_bootstrap.py"
       - "backend/app/db/session.py"
@@ -26,6 +27,7 @@ on:
       - "backend/tests/test_deploy_redis_config.py"
       - "backend/tests/test_deploy_neo4j_config.py"
       - "backend/tests/test_deploy_network_config.py"
+      - "backend/tests/test_deploy_cors_config.py"
       - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
@@ -42,6 +44,7 @@ on:
       - "backend/Dockerfile"
       - "backend/requirements.txt"
       - "backend/app/core/config.py"
+      - "backend/app/core/cors.py"
       - "backend/app/db/bootstrap.py"
       - "backend/app/db/safe_bootstrap.py"
       - "backend/app/db/session.py"
@@ -54,6 +57,7 @@ on:
       - "backend/tests/test_deploy_redis_config.py"
       - "backend/tests/test_deploy_neo4j_config.py"
       - "backend/tests/test_deploy_network_config.py"
+      - "backend/tests/test_deploy_cors_config.py"
       - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
@@ -102,6 +106,7 @@ jobs:
             backend/tests/test_deploy_redis_config.py \
             backend/tests/test_deploy_neo4j_config.py \
             backend/tests/test_deploy_network_config.py \
+            backend/tests/test_deploy_cors_config.py \
             backend/tests/test_deploy_windows_acl_contract.py
 
       - name: Create ephemeral CI environment
@@ -139,7 +144,7 @@ jobs:
               "BOOTSTRAP_ADMIN_USERNAME": "ci-admin",
               "BOOTSTRAP_ADMIN_PASSWORD": admin_password,
               "SEED_DEMO_DATA": "false",
-              "CORS_ORIGINS": '["http://localhost:18080"]',
+              "CORS_ORIGINS": '["http://localhost:18080","http://127.0.0.1:18080"]',
               "BACKEND_PORT": "18000",
               "FRONTEND_PORT": "18080",
           }
@@ -210,6 +215,20 @@ jobs:
         run: |
           curl --fail --silent --show-error --output /tmp/hosprime-frontend.html http://127.0.0.1:18080/
           test -s /tmp/hosprime-frontend.html
+
+      - name: Verify browser CORS preflight for the published frontend origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl --fail --silent --show-error \
+            --request OPTIONS \
+            --header 'Origin: http://127.0.0.1:18080' \
+            --header 'Access-Control-Request-Method: GET' \
+            --dump-header "$headers" \
+            --output /dev/null \
+            http://127.0.0.1:18000/health/live
+          grep -qi '^access-control-allow-origin: http://127.0.0.1:18080' "$headers"
 
       - name: Record running service state
         run: docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env ps

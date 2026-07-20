@@ -24,6 +24,7 @@ on:
       - "backend/tests/test_deploy_env_creation_guard.py"
       - "backend/tests/test_deploy_postgres_config.py"
       - "backend/tests/test_deploy_neo4j_config.py"
+      - "backend/tests/test_deploy_network_config.py"
       - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
@@ -50,6 +51,7 @@ on:
       - "backend/tests/test_deploy_env_creation_guard.py"
       - "backend/tests/test_deploy_postgres_config.py"
       - "backend/tests/test_deploy_neo4j_config.py"
+      - "backend/tests/test_deploy_network_config.py"
       - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
@@ -96,6 +98,7 @@ jobs:
             backend/tests/test_deploy_env_creation_guard.py \
             backend/tests/test_deploy_postgres_config.py \
             backend/tests/test_deploy_neo4j_config.py \
+            backend/tests/test_deploy_network_config.py \
             backend/tests/test_deploy_windows_acl_contract.py
 
       - name: Create ephemeral CI environment

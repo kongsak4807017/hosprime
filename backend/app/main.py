@@ -63,12 +63,19 @@ def startup_checks() -> None:
             "Unsafe runtime configuration: " + "; ".join(fatal_issues)
         )
 
-    warnings = settings.security_warnings()
-    if warnings:
-        message = "; ".join(warnings)
+    security_warnings = settings.security_warnings()
+    if security_warnings:
+        message = "; ".join(security_warnings)
         if settings.is_production:
             raise RuntimeError(f"Unsafe production configuration: {message}")
-        logger.warning("Development configuration warnings: %s", message)
+        logger.warning("Development security warnings: %s", message)
+
+    capability_warnings = settings.capability_warnings()
+    if capability_warnings:
+        logger.warning(
+            "Optional capabilities unavailable: %s",
+            "; ".join(capability_warnings),
+        )
 
     # MVP convenience only. Production must use Alembic migrations and a
     # controlled deployment job rather than create_all at application startup.
@@ -94,17 +101,20 @@ def health_live():
 
 @app.get("/health/ready")
 def health_ready():
-    issues = settings.security_warnings()
-    if settings.fatal_configuration_issues() or (
-        settings.is_production and issues
-    ):
+    fatal_issues = settings.fatal_configuration_issues()
+    security_warnings = settings.security_warnings()
+    if fatal_issues or (settings.is_production and security_warnings):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "not_ready", "configuration_issues": issues},
+            detail={
+                "status": "not_ready",
+                "configuration_issues": security_warnings,
+            },
         )
     return {
-        "status": "ready" if not issues else "degraded",
-        "configuration_warnings": issues,
+        "status": "ready" if not security_warnings else "degraded",
+        "configuration_warnings": security_warnings,
+        "capability_warnings": settings.capability_warnings(),
         "database_dialect": engine.dialect.name,
     }
 

@@ -131,11 +131,15 @@ except ValueError:
 if not 1 <= published_port <= 65535:
     raise SystemExit(1)
 
-parsed = urlsplit(values["NEO4J_URI"])
+try:
+    parsed = urlsplit(values["NEO4J_URI"])
+    internal_port = parsed.port
+except ValueError:
+    raise SystemExit(1)
 if (
     parsed.scheme not in {"bolt", "neo4j"}
     or parsed.hostname != "neo4j"
-    or parsed.port != 7687
+    or internal_port != 7687
     or parsed.username is not None
     or parsed.password is not None
     or parsed.path not in {"", "/"}

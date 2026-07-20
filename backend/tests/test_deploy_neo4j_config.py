@@ -6,7 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run(
+    args: list[str],
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    timeout: int = 30,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         cwd=cwd,
@@ -14,6 +19,7 @@ def _run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subpr
         text=True,
         capture_output=True,
         check=False,
+        timeout=timeout,
     )
 
 
@@ -112,6 +118,48 @@ def test_shell_rejects_inconsistent_neo4j_uri_before_compose(tmp_path: Path) -> 
     assert "Neo4j environment values are missing, malformed, or inconsistent" in combined
     assert "wrong-host" not in combined
     assert "fixture-neo4j-password" not in combined
+    assert "config --quiet" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_shell_rejects_non_numeric_internal_neo4j_port_without_traceback(tmp_path: Path) -> None:
+    repo, bin_dir, docker_log = _prepare_fixture(tmp_path)
+    env_file = tmp_path / "runtime.env"
+    synthetic_port = "not-a-port"
+    _write_env(env_file, f"bolt://neo4j:{synthetic_port}")
+
+    result = _run(
+        ["bash", "scripts/bootstrap.sh", "--skip-build"],
+        repo,
+        _bootstrap_env(bin_dir, docker_log, env_file),
+    )
+
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "Neo4j environment values are missing, malformed, or inconsistent" in combined
+    assert "Traceback" not in combined
+    assert "ValueError" not in combined
+    assert synthetic_port not in combined
+    assert "fixture-neo4j-password" not in combined
+    assert "config --quiet" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_shell_rejects_out_of_range_internal_neo4j_port_before_compose(tmp_path: Path) -> None:
+    repo, bin_dir, docker_log = _prepare_fixture(tmp_path)
+    env_file = tmp_path / "runtime.env"
+    synthetic_port = "70000"
+    _write_env(env_file, f"bolt://neo4j:{synthetic_port}")
+
+    result = _run(
+        ["bash", "scripts/bootstrap.sh", "--skip-build"],
+        repo,
+        _bootstrap_env(bin_dir, docker_log, env_file),
+    )
+
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "Neo4j environment values are missing, malformed, or inconsistent" in combined
+    assert "Traceback" not in combined
+    assert synthetic_port not in combined
     assert "config --quiet" not in docker_log.read_text(encoding="utf-8")
 
 

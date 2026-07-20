@@ -107,9 +107,16 @@ try {
     $live = Invoke-RestMethod -Uri "$BackendUrl/health/live" -TimeoutSec 15
     $ready = Invoke-RestMethod -Uri "$BackendUrl/health/ready" -TimeoutSec 15
     $frontend = Invoke-WebRequest -Uri "$FrontendUrl/" -TimeoutSec 15 -UseBasicParsing
-    if ($live.status -ne 'live') { Fail "Unexpected liveness status: $($live.status)" }
-    if ($ready.status -ne 'ready') { Fail "Backend is not fully ready: $($ready.status)" }
-    if ($ready.database_dialect -ne 'postgresql') { Fail "Expected PostgreSQL runtime; got $($ready.database_dialect)" }
+    if ($live.status -ne 'live') { Fail 'Backend liveness contract failed.' }
+    if ($ready.status -ne 'ready') { Fail 'Backend readiness contract failed.' }
+    if ($ready.database_dialect -ne 'postgresql') { Fail 'Backend database readiness contract failed.' }
+    if (@($ready.configuration_warnings).Count -ne 0) { Fail 'Backend reported security or configuration warnings.' }
+    $expectedCapabilityWarnings = @('External AI provider is not configured')
+    $actualCapabilityWarnings = @($ready.capability_warnings)
+    if ($actualCapabilityWarnings.Count -ne $expectedCapabilityWarnings.Count -or
+        [string]::Join("`n", $actualCapabilityWarnings) -cne [string]::Join("`n", $expectedCapabilityWarnings)) {
+        Fail 'Backend provider capability evidence is incomplete or unexpected.'
+    }
     if ([string]::IsNullOrWhiteSpace($frontend.Content)) { Fail 'Frontend returned an empty response.' }
     Write-Host "HosPrime health check passed (Compose project: $ProjectName, source commit: $SourceSha)."
     Write-Host "Verified loopback bindings: postgres=$PostgresPort redis=$RedisPort neo4j-http=$Neo4jHttpPort neo4j-bolt=$Neo4jBoltPort backend=$BackendPort frontend=$FrontendPort"

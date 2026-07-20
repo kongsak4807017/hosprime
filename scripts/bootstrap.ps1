@@ -133,6 +133,28 @@ function Assert-PostgresConfiguration([string]$Path) {
         }
     }
 }
+function Assert-RedisConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    if (-not $values.ContainsKey('REDIS_URL') -or [string]::IsNullOrWhiteSpace([string]$values['REDIS_URL'])) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate([string]$values['REDIS_URL'], [System.UriKind]::Absolute, [ref]$uri)) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+    if (
+        $uri.Scheme -ne 'redis' -or
+        $uri.Host -ne 'redis' -or
+        $uri.Port -ne 6379 -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo) -or
+        $uri.AbsolutePath -ne '/0' -or
+        -not [string]::IsNullOrEmpty($uri.Query) -or
+        -not [string]::IsNullOrEmpty($uri.Fragment)
+    ) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+}
 function Assert-Neo4jConfiguration([string]$Path) {
     $values = Read-EnvMap $Path
     foreach ($key in @('NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD')) {
@@ -260,6 +282,7 @@ try {
     }
 
     Assert-PostgresConfiguration $EnvFile
+    Assert-RedisConfiguration $EnvFile
     Assert-Neo4jConfiguration $EnvFile
     Assert-PublishedPortConfiguration $EnvFile
     Assert-BindAddressConfiguration $EnvFile

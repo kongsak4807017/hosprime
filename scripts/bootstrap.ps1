@@ -122,6 +122,9 @@ function Assert-PostgresConfiguration([string]$Path) {
         if (
             $uri.Scheme -notin @('postgres', 'postgresql') -or
             $uri.Host -ne 'postgres' -or
+            $uri.Port -ne 5432 -or
+            -not [string]::IsNullOrEmpty($uri.Query) -or
+            -not [string]::IsNullOrEmpty($uri.Fragment) -or
             $user -ne [string]$values['POSTGRES_USER'] -or
             $password -ne [string]$values['POSTGRES_PASSWORD'] -or
             $database -ne [string]$values['POSTGRES_DB']

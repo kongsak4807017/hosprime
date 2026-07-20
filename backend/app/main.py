@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 
@@ -7,6 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.router import api_router
 from backend.app.core.config import settings
+from backend.app.core.cors import (
+    CorsConfigurationError,
+    redact_cors_error,
+    validate_local_m0_cors_origins,
+)
 from backend.app.db.models import Base
 from backend.app.db.session import engine
 
@@ -19,28 +23,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _load_allowed_origins() -> list[str]:
+    raw_origins = os.getenv(
+        "CORS_ORIGINS",
+        '["http://localhost","http://127.0.0.1"]',
+    )
+    raw_frontend_port = os.getenv("FRONTEND_PORT", "80")
+    try:
+        frontend_port = int(raw_frontend_port)
+        return validate_local_m0_cors_origins(raw_origins, frontend_port)
+    except (CorsConfigurationError, TypeError, ValueError) as exc:
+        raise RuntimeError(redact_cors_error(exc)) from exc
+
+
+allowed_origins = _load_allowed_origins()
+
 app = FastAPI(
     title="HosPrime Knowledge Oracle API",
     description="Health Organization Operating System — governed MVP",
     version=settings.APP_VERSION,
 )
-
-cors_origins_env = os.getenv("CORS_ORIGINS")
-if cors_origins_env:
-    try:
-        allowed_origins = json.loads(cors_origins_env)
-    except Exception:
-        allowed_origins = [
-            origin.strip()
-            for origin in cors_origins_env.split(",")
-            if origin.strip()
-        ]
-else:
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-    ]
 
 app.add_middleware(
     CORSMiddleware,

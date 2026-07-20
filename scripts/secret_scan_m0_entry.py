@@ -35,6 +35,10 @@ MODERN_HIGH_CONFIDENCE_RULE_SPECS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "encrypted-private-key",
         re.compile(r"-----BEGIN ENCRYPTED PRIVATE KEY-----"),
     ),
+    (
+        "putty-private-key",
+        re.compile(r"(?m)^PuTTY-User-Key-File-[23]:\s*[^\r\n]+$"),
+    ),
 )
 
 

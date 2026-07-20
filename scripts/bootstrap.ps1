@@ -84,6 +84,52 @@ function Protect-EnvFileAcl([string]$Path) {
         }
     }
 }
+function Read-EnvMap([string]$Path) {
+    $values = @{}
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        $line = $rawLine.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#') -or -not $line.Contains('=')) { continue }
+        $parts = $line.Split('=', 2)
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        $values[$key] = $value
+    }
+    return $values
+}
+function Assert-PostgresConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    foreach ($key in @('POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'POSTGRES_URL')) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    foreach ($key in @('DATABASE_URL', 'POSTGRES_URL')) {
+        $uri = $null
+        if (-not [System.Uri]::TryCreate([string]$values[$key], [System.UriKind]::Absolute, [ref]$uri)) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+        $userInfo = $uri.UserInfo.Split(':', 2)
+        if ($userInfo.Count -ne 2) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+        $user = [System.Uri]::UnescapeDataString($userInfo[0])
+        $password = [System.Uri]::UnescapeDataString($userInfo[1])
+        $database = [System.Uri]::UnescapeDataString($uri.AbsolutePath.TrimStart('/'))
+        if (
+            $uri.Scheme -notin @('postgres', 'postgresql') -or
+            $uri.Host -ne 'postgres' -or
+            $user -ne [string]$values['POSTGRES_USER'] -or
+            $password -ne [string]$values['POSTGRES_PASSWORD'] -or
+            $database -ne [string]$values['POSTGRES_DB']
+        ) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -137,6 +183,7 @@ try {
         Fail "$EnvFile still contains CHANGE_ME placeholders."
     }
 
+    Assert-PostgresConfiguration $EnvFile
     $status = Invoke-Compose config --quiet
     if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 

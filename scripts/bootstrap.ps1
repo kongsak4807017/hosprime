@@ -164,6 +164,36 @@ function Assert-Neo4jConfiguration([string]$Path) {
         Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
     }
 }
+function Assert-PublishedPortConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    $portDefaults = [ordered]@{
+        POSTGRES_PORT = 5432
+        REDIS_PORT = 6379
+        NEO4J_HTTP_PORT = 7474
+        NEO4J_BOLT_PORT = 7687
+        BACKEND_PORT = 8000
+        FRONTEND_PORT = 80
+    }
+    $ports = New-Object System.Collections.Generic.List[int]
+    foreach ($entry in $portDefaults.GetEnumerator()) {
+        $rawValue = [string]$entry.Value
+        if ($values.ContainsKey($entry.Key)) { $rawValue = [string]$values[$entry.Key] }
+        $port = 0
+        if (
+            [string]::IsNullOrWhiteSpace($rawValue) -or
+            $rawValue -notmatch '^\d+$' -or
+            -not [int]::TryParse($rawValue, [ref]$port) -or
+            $port -lt 1 -or
+            $port -gt 65535
+        ) {
+            Fail 'Published port values are missing, malformed, or duplicated.'
+        }
+        $ports.Add($port)
+    }
+    if (($ports | Select-Object -Unique).Count -ne $ports.Count) {
+        Fail 'Published port values are missing, malformed, or duplicated.'
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -219,6 +249,7 @@ try {
 
     Assert-PostgresConfiguration $EnvFile
     Assert-Neo4jConfiguration $EnvFile
+    Assert-PublishedPortConfiguration $EnvFile
     $status = Invoke-Compose config --quiet
     if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 

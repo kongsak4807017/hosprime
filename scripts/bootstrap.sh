@@ -61,6 +61,40 @@ if mode & 0o077:
     raise SystemExit(1)
 PY
 }
+validate_postgres_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "PostgreSQL environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import unquote, urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+required = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "DATABASE_URL", "POSTGRES_URL")
+if any(not values.get(key) for key in required):
+    raise SystemExit(1)
+
+for key in ("DATABASE_URL", "POSTGRES_URL"):
+    parsed = urlsplit(values[key])
+    if (
+        parsed.scheme not in {"postgres", "postgresql"}
+        or parsed.hostname != "postgres"
+        or unquote(parsed.username or "") != values["POSTGRES_USER"]
+        or unquote(parsed.password or "") != values["POSTGRES_PASSWORD"]
+        or unquote(parsed.path.lstrip("/")) != values["POSTGRES_DB"]
+    ):
+        raise SystemExit(1)
+PY
+}
 
 [[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
 require docker
@@ -104,6 +138,7 @@ if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 
   fail "$ENV_FILE still contains CHANGE_ME placeholders"
 fi
 
+validate_postgres_configuration
 compose config --quiet
 if [[ "$SKIP_BUILD" == false ]]; then
   compose build

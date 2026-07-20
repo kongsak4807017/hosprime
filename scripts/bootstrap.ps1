@@ -194,6 +194,18 @@ function Assert-PublishedPortConfiguration([string]$Path) {
         Fail 'Published port values are missing, malformed, or duplicated.'
     }
 }
+function Assert-BindAddressConfiguration([string]$Path) {
+    $rawMatch = $null
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        if ($rawLine -match '^HOSPRIME_BIND_ADDRESS=(.*)$') {
+            if ($null -ne $rawMatch) { Fail 'HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview.' }
+            $rawMatch = [string]$Matches[1]
+        }
+    }
+    if ($null -eq $rawMatch -or $rawMatch -ne '127.0.0.1') {
+        Fail 'HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview.'
+    }
+}
 function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
     & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
     return $LASTEXITCODE
@@ -250,6 +262,7 @@ try {
     Assert-PostgresConfiguration $EnvFile
     Assert-Neo4jConfiguration $EnvFile
     Assert-PublishedPortConfiguration $EnvFile
+    Assert-BindAddressConfiguration $EnvFile
     $status = Invoke-Compose config --quiet
     if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
 

@@ -23,6 +23,7 @@ SENSITIVE_TEXT_SUFFIXES = {
     ".credentials",
     ".key",
     ".pem",
+    ".ppk",
     ".properties",
     ".sql",
     ".xml",

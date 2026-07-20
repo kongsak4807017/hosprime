@@ -137,11 +137,10 @@ class Settings(BaseSettings):
         return issues
 
     def security_warnings(self) -> list[str]:
+        """Return security defects that make production unsafe or local readiness degraded."""
         warnings = self.fatal_configuration_issues()
         if not self.JWT_SECRET:
             warnings.append("JWT_SECRET is not configured")
-        if not self.GEMINI_API_KEY:
-            warnings.append("GEMINI_API_KEY is not configured")
         if not self.NEO4J_PASSWORD:
             warnings.append("NEO4J_PASSWORD is not configured")
         if self.ALLOW_DEMO_FALLBACKS:
@@ -153,6 +152,13 @@ class Settings(BaseSettings):
         if self.is_production and self.effective_database_url.startswith("sqlite:"):
             warnings.append("SQLite is not permitted in production")
         return list(dict.fromkeys(warnings))
+
+    def capability_warnings(self) -> list[str]:
+        """Return unavailable optional capabilities without degrading core readiness."""
+        warnings: list[str] = []
+        if not self.GEMINI_API_KEY:
+            warnings.append("External AI provider is not configured")
+        return warnings
 
 
 settings = Settings()

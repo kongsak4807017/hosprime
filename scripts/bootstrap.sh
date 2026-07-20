@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE_INPUT="${HOSPRIME_ENV_FILE:-$ROOT_DIR/.env}"
+PROJECT_NAME="${HOSPRIME_COMPOSE_PROJECT_NAME:-hosprime}"
+SKIP_BUILD=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build) SKIP_BUILD=true ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/bootstrap.sh [--skip-build]
+
+Creates .env from .env.example when missing, validates configuration,
+builds and starts HosPrime, then runs the health check.
+Set HOSPRIME_ENV_FILE to an absolute path or a path relative to the caller.
+Set HOSPRIME_COMPOSE_PROJECT_NAME to isolate this stack from other checkouts.
+The checkout must be a pristine Git commit so runtime evidence is attributable.
+Runtime environment files stored inside the repository must be ignored by Git.
+Runtime environment files are restricted to the current user before Compose runs.
+EOF
+      exit 0
+      ;;
+    *) printf 'Unknown argument: %s\n' "$arg" >&2; exit 2 ;;
+  esac
+done
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+require() { command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"; }
+assert_in_repo_env_is_ignored() {
+  local relative_path
+  if relative_path="$(python3 - "$ROOT_DIR" "$ENV_FILE" <<'PY'
+import os
+import sys
+
+root = os.path.realpath(sys.argv[1])
+path = os.path.realpath(sys.argv[2])
+try:
+    inside = os.path.commonpath((root, path)) == root
+except ValueError:
+    inside = False
+if not inside:
+    raise SystemExit(1)
+print(os.path.relpath(path, root).replace(os.sep, "/"))
+PY
+  )"; then
+    git check-ignore -q -- "$relative_path" || fail "Environment file inside repository must be ignored by Git: $relative_path"
+  fi
+}
+protect_env_file() {
+  chmod 600 "$ENV_FILE" || fail "Unable to restrict environment file permissions: $ENV_FILE"
+  python3 - "$ENV_FILE" <<'PY' || fail "Environment file permissions must deny group and other access: $ENV_FILE"
+import os
+import stat
+import sys
+
+mode = stat.S_IMODE(os.stat(sys.argv[1], follow_symlinks=False).st_mode)
+if mode & 0o077:
+    raise SystemExit(1)
+PY
+}
+validate_postgres_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "PostgreSQL environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import unquote, urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+required = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "DATABASE_URL", "POSTGRES_URL")
+if any(not values.get(key) for key in required):
+    raise SystemExit(1)
+
+for key in ("DATABASE_URL", "POSTGRES_URL"):
+    try:
+        parsed = urlsplit(values[key])
+        port = parsed.port
+    except ValueError:
+        raise SystemExit(1)
+    if (
+        parsed.scheme not in {"postgres", "postgresql"}
+        or parsed.hostname != "postgres"
+        or port != 5432
+        or unquote(parsed.username or "") != values["POSTGRES_USER"]
+        or unquote(parsed.password or "") != values["POSTGRES_PASSWORD"]
+        or unquote(parsed.path.lstrip("/")) != values["POSTGRES_DB"]
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise SystemExit(1)
+PY
+}
+validate_redis_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Redis environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+redis_url = values.get("REDIS_URL", "")
+if not redis_url:
+    raise SystemExit(1)
+
+try:
+    parsed = urlsplit(redis_url)
+    internal_port = parsed.port
+except ValueError:
+    raise SystemExit(1)
+if (
+    parsed.scheme != "redis"
+    or parsed.hostname != "redis"
+    or internal_port != 6379
+    or parsed.username is not None
+    or parsed.password is not None
+    or parsed.path != "/0"
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(1)
+PY
+}
+validate_neo4j_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Neo4j environment values are missing, malformed, or inconsistent"
+import sys
+from urllib.parse import urlsplit
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+required = ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD")
+if any(not values.get(key) for key in required):
+    raise SystemExit(1)
+
+try:
+    published_port = int(values.get("NEO4J_BOLT_PORT", "7687"))
+except ValueError:
+    raise SystemExit(1)
+if not 1 <= published_port <= 65535:
+    raise SystemExit(1)
+
+try:
+    parsed = urlsplit(values["NEO4J_URI"])
+    internal_port = parsed.port
+except ValueError:
+    raise SystemExit(1)
+if (
+    parsed.scheme not in {"bolt", "neo4j"}
+    or parsed.hostname != "neo4j"
+    or internal_port != 7687
+    or parsed.username is not None
+    or parsed.password is not None
+    or parsed.path not in {"", "/"}
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(1)
+PY
+}
+validate_published_port_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "Published port values are missing, malformed, or duplicated"
+import sys
+
+values = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+
+port_defaults = {
+    "POSTGRES_PORT": "5432",
+    "REDIS_PORT": "6379",
+    "NEO4J_HTTP_PORT": "7474",
+    "NEO4J_BOLT_PORT": "7687",
+    "BACKEND_PORT": "8000",
+    "FRONTEND_PORT": "80",
+}
+ports = []
+for key, default in port_defaults.items():
+    raw_value = values.get(key, default)
+    if not raw_value or not raw_value.isascii() or not raw_value.isdecimal():
+        raise SystemExit(1)
+    port = int(raw_value)
+    if not 1 <= port <= 65535:
+        raise SystemExit(1)
+    ports.append(port)
+if len(set(ports)) != len(ports):
+    raise SystemExit(1)
+PY
+}
+validate_bind_address_configuration() {
+  python3 - "$ENV_FILE" <<'PY' || fail "HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview"
+import sys
+
+value = None
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for raw_line in handle:
+        line = raw_line.rstrip("\r\n")
+        if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        key, candidate = line.split("=", 1)
+        if key.strip() != "HOSPRIME_BIND_ADDRESS":
+            continue
+        if candidate != candidate.strip():
+            raise SystemExit(1)
+        if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {"'", '"'}:
+            candidate = candidate[1:-1]
+        value = candidate
+
+if value != "127.0.0.1":
+    raise SystemExit(1)
+PY
+}
+
+[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "HOSPRIME_COMPOSE_PROJECT_NAME must match ^[a-z0-9][a-z0-9_-]*$"
+require docker
+require curl
+require python3
+require git
+ENV_FILE="$(python3 - "$ENV_FILE_INPUT" <<'PY'
+import os
+import sys
+print(os.path.abspath(sys.argv[1]))
+PY
+)"
+compose() { docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" "$@"; }
+
+docker info >/dev/null 2>&1 || fail "Docker daemon is not available"
+docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
+
+cd "$ROOT_DIR"
+SOURCE_SHA="$(git rev-parse --verify HEAD 2>/dev/null)" || fail "HosPrime source must be a Git checkout"
+[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "Unable to resolve an exact HosPrime source commit"
+[[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || fail "HosPrime checkout must be pristine before bootstrap"
+export HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA"
+
+# Enforce the Git-ignore boundary before creating a new in-repository file.
+# This prevents even the initial placeholder copy from becoming an untracked,
+# credential-bearing file that can later be committed accidentally.
+assert_in_repo_env_is_ignored
+
+if [[ ! -e "$ENV_FILE" ]]; then
+  [[ -d "$(dirname "$ENV_FILE")" ]] || fail "Environment file parent directory does not exist: $(dirname "$ENV_FILE")"
+  cp .env.example "$ENV_FILE"
+  chmod 600 "$ENV_FILE" || fail "Unable to restrict new environment file permissions: $ENV_FILE"
+  printf 'Created %s from .env.example. Replace every CHANGE_ME value, then run this command again.\n' "$ENV_FILE"
+  exit 2
+fi
+[[ -f "$ENV_FILE" ]] || fail "Environment path is not a regular file: $ENV_FILE"
+[[ ! -L "$ENV_FILE" ]] || fail "Environment file must not be a symbolic link: $ENV_FILE"
+protect_env_file
+
+if awk '!/^[[:space:]]*(#|$)/ && /CHANGE_ME/ { found = 1 } END { exit(found ? 0 : 1) }' "$ENV_FILE"; then
+  fail "$ENV_FILE still contains CHANGE_ME placeholders"
+fi
+
+validate_postgres_configuration
+validate_redis_configuration
+validate_neo4j_configuration
+validate_published_port_configuration
+validate_bind_address_configuration
+compose config --quiet
+if [[ "$SKIP_BUILD" == false ]]; then
+  compose build
+fi
+compose up --detach --wait --wait-timeout 240
+HOSPRIME_ENV_FILE="$ENV_FILE" HOSPRIME_COMPOSE_PROJECT_NAME="$PROJECT_NAME" HOSPRIME_EXPECTED_GIT_SHA="$SOURCE_SHA" HOSPRIME_BUILD_GIT_SHA="$SOURCE_SHA" bash "$ROOT_DIR/scripts/healthcheck.sh"
+
+printf 'HosPrime local stack is ready (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"

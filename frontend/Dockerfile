@@ -12,6 +12,9 @@ RUN npm run build
 # Stage 2: Nginx serving
 FROM nginx:alpine
 
+ARG HOSPRIME_GIT_SHA
+LABEL org.opencontainers.image.revision=$HOSPRIME_GIT_SHA
+
 # คัดลอก static assets ที่สร้างจาก build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 

@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 
@@ -7,6 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.router import api_router
 from backend.app.core.config import settings
+from backend.app.core.cors import (
+    CorsConfigurationError,
+    redact_cors_error,
+    validate_local_m0_cors_origins,
+)
 from backend.app.db.models import Base
 from backend.app.db.session import engine
 
@@ -19,28 +23,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _load_allowed_origins() -> list[str]:
+    raw_origins = os.getenv(
+        "CORS_ORIGINS",
+        '["http://localhost","http://127.0.0.1"]',
+    )
+    raw_frontend_port = os.getenv("FRONTEND_PORT", "80")
+    try:
+        frontend_port = int(raw_frontend_port)
+        return validate_local_m0_cors_origins(raw_origins, frontend_port)
+    except (CorsConfigurationError, TypeError, ValueError) as exc:
+        raise RuntimeError(redact_cors_error(exc)) from exc
+
+
+allowed_origins = _load_allowed_origins()
+
 app = FastAPI(
     title="HosPrime Knowledge Oracle API",
     description="Health Organization Operating System — governed MVP",
     version=settings.APP_VERSION,
 )
-
-cors_origins_env = os.getenv("CORS_ORIGINS")
-if cors_origins_env:
-    try:
-        allowed_origins = json.loads(cors_origins_env)
-    except Exception:
-        allowed_origins = [
-            origin.strip()
-            for origin in cors_origins_env.split(",")
-            if origin.strip()
-        ]
-else:
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,12 +63,19 @@ def startup_checks() -> None:
             "Unsafe runtime configuration: " + "; ".join(fatal_issues)
         )
 
-    warnings = settings.security_warnings()
-    if warnings:
-        message = "; ".join(warnings)
+    security_warnings = settings.security_warnings()
+    if security_warnings:
+        message = "; ".join(security_warnings)
         if settings.is_production:
             raise RuntimeError(f"Unsafe production configuration: {message}")
-        logger.warning("Development configuration warnings: %s", message)
+        logger.warning("Development security warnings: %s", message)
+
+    capability_warnings = settings.capability_warnings()
+    if capability_warnings:
+        logger.warning(
+            "Optional capabilities unavailable: %s",
+            "; ".join(capability_warnings),
+        )
 
     # MVP convenience only. Production must use Alembic migrations and a
     # controlled deployment job rather than create_all at application startup.
@@ -92,17 +101,20 @@ def health_live():
 
 @app.get("/health/ready")
 def health_ready():
-    issues = settings.security_warnings()
-    if settings.fatal_configuration_issues() or (
-        settings.is_production and issues
-    ):
+    fatal_issues = settings.fatal_configuration_issues()
+    security_warnings = settings.security_warnings()
+    if fatal_issues or (settings.is_production and security_warnings):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "not_ready", "configuration_issues": issues},
+            detail={
+                "status": "not_ready",
+                "configuration_issues": security_warnings,
+            },
         )
     return {
-        "status": "ready" if not issues else "degraded",
-        "configuration_warnings": issues,
+        "status": "ready" if not security_warnings else "degraded",
+        "configuration_warnings": security_warnings,
+        "capability_warnings": settings.capability_warnings(),
         "database_dialect": engine.dialect.name,
     }
 

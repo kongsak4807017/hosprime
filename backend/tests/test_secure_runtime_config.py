@@ -88,7 +88,6 @@ def test_compose_uses_required_environment_substitution() -> None:
         "DATABASE_URL",
         "POSTGRES_URL",
         "NEO4J_PASSWORD",
-        "GEMINI_API_KEY",
         "JWT_SECRET",
         "BOOTSTRAP_ADMIN_USERNAME",
         "BOOTSTRAP_ADMIN_PASSWORD",
@@ -106,6 +105,59 @@ def test_compose_uses_required_environment_substitution() -> None:
     lowered = compose.lower()
     for literal in forbidden_literals:
         assert literal not in lowered
+
+
+def test_local_m0_compose_allows_missing_external_provider_key() -> None:
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    env_example = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
+
+    assert "GEMINI_API_KEY: ${GEMINI_API_KEY:-}" in compose
+    assert "${GEMINI_API_KEY:?" not in compose
+    assert "GEMINI_API_KEY=\n" in env_example
+    assert "Optional for the local M0 developer preview" in env_example
+    provider_free = make_settings(GEMINI_API_KEY="")
+    assert provider_free.fatal_configuration_issues() == []
+    assert "GEMINI_API_KEY is not configured" not in provider_free.security_warnings()
+    assert "External AI provider is not configured" in provider_free.capability_warnings()
+
+
+def test_ci_runtime_credentials_are_generated_per_run() -> None:
+    workflow = (
+        REPOSITORY_ROOT / ".github" / "workflows" / "m0-secure-runtime-test.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "import secrets" in workflow
+    assert "secrets.token_urlsafe(32)" in workflow
+    assert "secrets.token_urlsafe(48)" in workflow
+    assert 'quote(postgres_password, safe="")' in workflow
+    assert 'Path(".env").write_text' in workflow
+    assert "chmod 600 .env" in workflow
+    assert '"GEMINI_API_KEY": ""' in workflow
+    assert "provider_key =" not in workflow
+
+    forbidden_fixed_credentials = (
+        "ci-postgres-password-not-for-production",
+        "ci-neo4j-password-not-for-production",
+        "ci-provider-key-not-for-production",
+        "ci-only-jwt-secret-with-more-than-thirty-two-characters",
+        "ci-admin-password-not-for-production",
+    )
+    for credential in forbidden_fixed_credentials:
+        assert credential not in workflow
+
+
+def test_compose_requires_frontend_health_before_readiness() -> None:
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    frontend = compose.split("\n  frontend:\n", 1)[1].split("\nvolumes:\n", 1)[0]
+
+    assert "healthcheck:" in frontend
+    assert '["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]' in frontend
+    assert "CMD-SHELL" not in frontend
+    assert "http://localhost/" not in frontend
+    assert "interval: 15s" in frontend
+    assert "timeout: 5s" in frontend
+    assert "retries: 10" in frontend
+    assert "start_period: 10s" in frontend
 
 
 def test_deploy_bootstrap_is_idempotent_and_non_destructive() -> None:

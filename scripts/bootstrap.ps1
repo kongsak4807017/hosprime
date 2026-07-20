@@ -1,0 +1,307 @@
+[CmdletBinding()]
+param(
+    [switch]$SkipBuild,
+    [string]$EnvFile = $env:HOSPRIME_ENV_FILE,
+    [string]$ProjectName = $env:HOSPRIME_COMPOSE_PROJECT_NAME
+)
+
+$ErrorActionPreference = 'Stop'
+$RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir '.env' }
+if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
+    $EnvFile = Join-Path (Get-Location).Path $EnvFile
+}
+$EnvFile = [System.IO.Path]::GetFullPath($EnvFile)
+if ([string]::IsNullOrWhiteSpace($ProjectName)) { $ProjectName = 'hosprime' }
+
+function Fail([string]$Message) { throw $Message }
+function Assert-RegularEnvFile([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer) { Fail "Environment path is not a regular file: $Path" }
+    if ($item.LinkType) { Fail "Environment file must not be a symbolic link: $Path" }
+}
+function Assert-InRepoEnvIsIgnored([string]$Path) {
+    $rootPrefix = $RootDir.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    if ($Path.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $relativePath = $Path.Substring($rootPrefix.Length).Replace('\', '/')
+        & git check-ignore -q -- $relativePath
+        if ($LASTEXITCODE -ne 0) { Fail "Environment file inside repository must be ignored by Git: $relativePath" }
+    }
+}
+function Protect-EnvFileAcl([string]$Path) {
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) { return }
+
+    $currentUserSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $systemSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
+    $administratorsSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true, $false)
+
+    foreach ($sid in @($currentUserSid, $systemSid, $administratorsSid)) {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $sid,
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        [void]$acl.AddAccessRule($rule)
+    }
+
+    try {
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    }
+    catch {
+        Fail "Unable to restrict environment file ACL: $Path"
+    }
+
+    $effectiveAcl = Get-Acl -LiteralPath $Path
+    if (-not $effectiveAcl.AreAccessRulesProtected) {
+        Fail "Environment file ACL still inherits access rules: $Path"
+    }
+
+    $requiredSidRights = @{
+        $currentUserSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+        $systemSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+        $administratorsSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
+    }
+    $verifiedSids = @{}
+
+    foreach ($entry in $effectiveAcl.Access) {
+        if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+        $entrySid = $entry.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        if (-not $requiredSidRights.ContainsKey($entrySid)) {
+            Fail "Environment file ACL grants access to an unexpected identity: $Path"
+        }
+        $requiredRights = $requiredSidRights[$entrySid]
+        if (($entry.FileSystemRights -band $requiredRights) -ne $requiredRights) {
+            Fail "Environment file ACL is missing required FullControl for an allowed identity: $Path"
+        }
+        $verifiedSids[$entrySid] = $true
+    }
+
+    foreach ($requiredSid in $requiredSidRights.Keys) {
+        if (-not $verifiedSids.ContainsKey($requiredSid)) {
+            Fail "Environment file ACL is missing required FullControl for an allowed identity: $Path"
+        }
+    }
+}
+function Read-EnvMap([string]$Path) {
+    $values = @{}
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        $line = $rawLine.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith('#') -or -not $line.Contains('=')) { continue }
+        $parts = $line.Split('=', 2)
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        $values[$key] = $value
+    }
+    return $values
+}
+function Assert-PostgresConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    foreach ($key in @('POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'POSTGRES_URL')) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    foreach ($key in @('DATABASE_URL', 'POSTGRES_URL')) {
+        $uri = $null
+        if (-not [System.Uri]::TryCreate([string]$values[$key], [System.UriKind]::Absolute, [ref]$uri)) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+        $userInfo = $uri.UserInfo.Split(':', 2)
+        if ($userInfo.Count -ne 2) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+        $user = [System.Uri]::UnescapeDataString($userInfo[0])
+        $password = [System.Uri]::UnescapeDataString($userInfo[1])
+        $database = [System.Uri]::UnescapeDataString($uri.AbsolutePath.TrimStart('/'))
+        if (
+            $uri.Scheme -notin @('postgres', 'postgresql') -or
+            $uri.Host -ne 'postgres' -or
+            $uri.Port -ne 5432 -or
+            -not [string]::IsNullOrEmpty($uri.Query) -or
+            -not [string]::IsNullOrEmpty($uri.Fragment) -or
+            $user -ne [string]$values['POSTGRES_USER'] -or
+            $password -ne [string]$values['POSTGRES_PASSWORD'] -or
+            $database -ne [string]$values['POSTGRES_DB']
+        ) {
+            Fail 'PostgreSQL environment values are missing, malformed, or inconsistent.'
+        }
+    }
+}
+function Assert-RedisConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    if (-not $values.ContainsKey('REDIS_URL') -or [string]::IsNullOrWhiteSpace([string]$values['REDIS_URL'])) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate([string]$values['REDIS_URL'], [System.UriKind]::Absolute, [ref]$uri)) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+    if (
+        $uri.Scheme -ne 'redis' -or
+        $uri.Host -ne 'redis' -or
+        $uri.Port -ne 6379 -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo) -or
+        $uri.AbsolutePath -ne '/0' -or
+        -not [string]::IsNullOrEmpty($uri.Query) -or
+        -not [string]::IsNullOrEmpty($uri.Fragment)
+    ) {
+        Fail 'Redis environment values are missing, malformed, or inconsistent.'
+    }
+}
+function Assert-Neo4jConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    foreach ($key in @('NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD')) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    $publishedBoltPort = 7687
+    if ($values.ContainsKey('NEO4J_BOLT_PORT')) {
+        if (-not [int]::TryParse([string]$values['NEO4J_BOLT_PORT'], [ref]$publishedBoltPort) -or $publishedBoltPort -lt 1 -or $publishedBoltPort -gt 65535) {
+            Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+        }
+    }
+
+    $uri = $null
+    if (-not [System.Uri]::TryCreate([string]$values['NEO4J_URI'], [System.UriKind]::Absolute, [ref]$uri)) {
+        Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+    }
+    if (
+        $uri.Scheme -notin @('bolt', 'neo4j') -or
+        $uri.Host -ne 'neo4j' -or
+        $uri.Port -ne 7687 -or
+        -not [string]::IsNullOrEmpty($uri.UserInfo) -or
+        $uri.AbsolutePath -notin @('', '/') -or
+        -not [string]::IsNullOrEmpty($uri.Query) -or
+        -not [string]::IsNullOrEmpty($uri.Fragment)
+    ) {
+        Fail 'Neo4j environment values are missing, malformed, or inconsistent.'
+    }
+}
+function Assert-PublishedPortConfiguration([string]$Path) {
+    $values = Read-EnvMap $Path
+    $portDefaults = [ordered]@{
+        POSTGRES_PORT = 5432
+        REDIS_PORT = 6379
+        NEO4J_HTTP_PORT = 7474
+        NEO4J_BOLT_PORT = 7687
+        BACKEND_PORT = 8000
+        FRONTEND_PORT = 80
+    }
+    $ports = New-Object System.Collections.Generic.List[int]
+    foreach ($entry in $portDefaults.GetEnumerator()) {
+        $rawValue = [string]$entry.Value
+        if ($values.ContainsKey($entry.Key)) { $rawValue = [string]$values[$entry.Key] }
+        $port = 0
+        if (
+            [string]::IsNullOrWhiteSpace($rawValue) -or
+            $rawValue -notmatch '^\d+$' -or
+            -not [int]::TryParse($rawValue, [ref]$port) -or
+            $port -lt 1 -or
+            $port -gt 65535
+        ) {
+            Fail 'Published port values are missing, malformed, or duplicated.'
+        }
+        $ports.Add($port)
+    }
+    if (($ports | Select-Object -Unique).Count -ne $ports.Count) {
+        Fail 'Published port values are missing, malformed, or duplicated.'
+    }
+}
+function Assert-BindAddressConfiguration([string]$Path) {
+    $rawMatch = $null
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        if ($rawLine -match '^HOSPRIME_BIND_ADDRESS=(.*)$') {
+            if ($null -ne $rawMatch) { Fail 'HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview.' }
+            $rawMatch = [string]$Matches[1]
+        }
+    }
+    if ($null -eq $rawMatch -or $rawMatch -ne '127.0.0.1') {
+        Fail 'HOSPRIME_BIND_ADDRESS must be exactly 127.0.0.1 for the M0 local preview.'
+    }
+}
+function Invoke-Compose([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) {
+    & docker compose --project-name $ProjectName --env-file $EnvFile @Arguments
+    return $LASTEXITCODE
+}
+function Get-ExactSourceSha() {
+    $sha = [string]::Join('', @(& git rev-parse --verify HEAD 2>$null)).Trim()
+    if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { Fail 'Unable to resolve an exact HosPrime source commit.' }
+    return $sha
+}
+function Assert-PristineCheckout() {
+    $status = @(& git status --porcelain=v1 --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) { Fail 'Unable to inspect HosPrime checkout status.' }
+    if ($status.Count -ne 0) { Fail 'HosPrime checkout must be pristine before bootstrap.' }
+}
+
+if ($ProjectName -notmatch '^[a-z0-9][a-z0-9_-]*$') { Fail 'ProjectName must match ^[a-z0-9][a-z0-9_-]*$.' }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Docker is required.' }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Fail 'Git is required.' }
+& docker info *> $null
+if ($LASTEXITCODE -ne 0) { Fail 'Docker daemon is not available.' }
+& docker compose version *> $null
+if ($LASTEXITCODE -ne 0) { Fail 'Docker Compose v2 is required.' }
+
+$PreviousBuildGitSha = $env:HOSPRIME_BUILD_GIT_SHA
+Push-Location $RootDir
+try {
+    $SourceSha = Get-ExactSourceSha
+    Assert-PristineCheckout
+    $env:HOSPRIME_BUILD_GIT_SHA = $SourceSha
+
+    # Apply the repository ignore boundary before any new runtime file is
+    # copied. This prevents a custom in-repository path from becoming an
+    # untracked credential-bearing file before the next bootstrap run.
+    Assert-InRepoEnvIsIgnored $EnvFile
+
+    if (-not (Test-Path -LiteralPath $EnvFile)) {
+        $parent = Split-Path -Parent $EnvFile
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) { Fail "Environment file parent directory does not exist: $parent" }
+        Copy-Item -LiteralPath (Join-Path $RootDir '.env.example') -Destination $EnvFile
+        Protect-EnvFileAcl $EnvFile
+        Write-Host "Created $EnvFile from .env.example. Replace every CHANGE_ME value, then run this command again."
+        exit 2
+    }
+    Assert-RegularEnvFile $EnvFile
+    Protect-EnvFileAcl $EnvFile
+
+    $placeholderLine = Get-Content -LiteralPath $EnvFile | Where-Object {
+        $_ -notmatch '^\s*(#|$)' -and $_ -match 'CHANGE_ME'
+    } | Select-Object -First 1
+    if ($null -ne $placeholderLine) {
+        Fail "$EnvFile still contains CHANGE_ME placeholders."
+    }
+
+    Assert-PostgresConfiguration $EnvFile
+    Assert-RedisConfiguration $EnvFile
+    Assert-Neo4jConfiguration $EnvFile
+    Assert-PublishedPortConfiguration $EnvFile
+    Assert-BindAddressConfiguration $EnvFile
+    $status = Invoke-Compose config --quiet
+    if ($status -ne 0) { Fail 'Docker Compose configuration validation failed.' }
+
+    if (-not $SkipBuild) {
+        $status = Invoke-Compose build
+        if ($status -ne 0) { Fail 'Docker image build failed.' }
+    }
+
+    $status = Invoke-Compose up --detach --wait --wait-timeout 240
+    if ($status -ne 0) { Fail 'HosPrime stack did not become healthy.' }
+
+    & (Join-Path $PSScriptRoot 'healthcheck.ps1') -EnvFile $EnvFile -ProjectName $ProjectName -ExpectedGitSha $SourceSha
+    if ($LASTEXITCODE -ne 0) { Fail 'HosPrime health check failed.' }
+    Write-Host "HosPrime local stack is ready (Compose project: $ProjectName, source commit: $SourceSha)."
+}
+finally {
+    $env:HOSPRIME_BUILD_GIT_SHA = $PreviousBuildGitSha
+    Pop-Location
+}

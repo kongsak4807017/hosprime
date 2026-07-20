@@ -7,14 +7,29 @@ on:
     paths:
       - ".env.example"
       - "docker-compose.yml"
+      - "scripts/bootstrap.sh"
+      - "scripts/bootstrap.ps1"
+      - "scripts/healthcheck.sh"
+      - "scripts/healthcheck.ps1"
       - "backend/Dockerfile"
       - "backend/requirements.txt"
       - "backend/app/core/config.py"
+      - "backend/app/core/cors.py"
       - "backend/app/db/bootstrap.py"
       - "backend/app/db/safe_bootstrap.py"
       - "backend/app/db/session.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
+      - "backend/tests/test_provider_capability_readiness.py"
+      - "backend/tests/test_deploy_scripts.py"
+      - "backend/tests/test_deploy_source_provenance.py"
+      - "backend/tests/test_deploy_env_creation_guard.py"
+      - "backend/tests/test_deploy_postgres_config.py"
+      - "backend/tests/test_deploy_redis_config.py"
+      - "backend/tests/test_deploy_neo4j_config.py"
+      - "backend/tests/test_deploy_network_config.py"
+      - "backend/tests/test_deploy_cors_config.py"
+      - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -23,14 +38,29 @@ on:
     paths:
       - ".env.example"
       - "docker-compose.yml"
+      - "scripts/bootstrap.sh"
+      - "scripts/bootstrap.ps1"
+      - "scripts/healthcheck.sh"
+      - "scripts/healthcheck.ps1"
       - "backend/Dockerfile"
       - "backend/requirements.txt"
       - "backend/app/core/config.py"
+      - "backend/app/core/cors.py"
       - "backend/app/db/bootstrap.py"
       - "backend/app/db/safe_bootstrap.py"
       - "backend/app/db/session.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
+      - "backend/tests/test_provider_capability_readiness.py"
+      - "backend/tests/test_deploy_scripts.py"
+      - "backend/tests/test_deploy_source_provenance.py"
+      - "backend/tests/test_deploy_env_creation_guard.py"
+      - "backend/tests/test_deploy_postgres_config.py"
+      - "backend/tests/test_deploy_redis_config.py"
+      - "backend/tests/test_deploy_neo4j_config.py"
+      - "backend/tests/test_deploy_network_config.py"
+      - "backend/tests/test_deploy_cors_config.py"
+      - "backend/tests/test_deploy_windows_acl_contract.py"
       - "frontend/Dockerfile"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -39,6 +69,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  HOSPRIME_COMPOSE_PROJECT_NAME: hosprime-ci
 
 jobs:
   secure-runtime-test:
@@ -56,45 +89,79 @@ jobs:
       - name: Install backend test dependencies
         run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
 
-      - name: Run secure runtime regression tests
-        run: python -m pytest -q backend/tests/test_secure_runtime_config.py
+      - name: Validate deploy script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/bootstrap.sh scripts/healthcheck.sh
+          pwsh -NoProfile -Command '$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("scripts/bootstrap.ps1", [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | Format-List | Out-String | Write-Error }'
+          pwsh -NoProfile -Command '$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("scripts/healthcheck.ps1", [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | Format-List | Out-String | Write-Error }'
+
+      - name: Run secure runtime and deploy regression tests
+        run: |
+          python -m pytest -q \
+            backend/tests/test_secure_runtime_config.py \
+            backend/tests/test_provider_capability_readiness.py \
+            backend/tests/test_deploy_scripts.py \
+            backend/tests/test_deploy_source_provenance.py \
+            backend/tests/test_deploy_env_creation_guard.py \
+            backend/tests/test_deploy_postgres_config.py \
+            backend/tests/test_deploy_redis_config.py \
+            backend/tests/test_deploy_neo4j_config.py \
+            backend/tests/test_deploy_network_config.py \
+            backend/tests/test_deploy_cors_config.py \
+            backend/tests/test_deploy_windows_acl_contract.py
 
       - name: Create ephemeral CI environment
         shell: bash
         run: |
-          cat > .env <<'EOF'
-          ENVIRONMENT=development
-          POSTGRES_DB=hosprime
-          POSTGRES_USER=hosprime
-          POSTGRES_PASSWORD=ci-postgres-password-not-for-production
-          POSTGRES_PORT=15432
-          DATABASE_URL=postgresql://hosprime:ci-postgres-password-not-for-production@postgres:5432/hosprime
-          POSTGRES_URL=postgresql://hosprime:ci-postgres-password-not-for-production@postgres:5432/hosprime
-          REDIS_URL=redis://redis:6379/0
-          REDIS_PORT=16379
-          NEO4J_URI=bolt://neo4j:7687
-          NEO4J_USER=neo4j
-          NEO4J_PASSWORD=ci-neo4j-password-not-for-production
-          NEO4J_HTTP_PORT=17474
-          NEO4J_BOLT_PORT=17687
-          GEMINI_API_KEY=ci-provider-key-not-for-production
-          JWT_SECRET=ci-only-jwt-secret-with-more-than-thirty-two-characters
-          BOOTSTRAP_ADMIN_USERNAME=ci-admin
-          BOOTSTRAP_ADMIN_PASSWORD=ci-admin-password-not-for-production
-          SEED_DEMO_DATA=false
-          CORS_ORIGINS=["http://localhost:18080"]
-          BACKEND_PORT=18000
-          FRONTEND_PORT=18080
-          EOF
+          set -euo pipefail
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          from urllib.parse import quote
 
-      - name: Validate resolved Compose model
-        run: docker compose --env-file .env config --quiet
+          postgres_password = secrets.token_urlsafe(32)
+          neo4j_password = secrets.token_urlsafe(32)
+          jwt_secret = secrets.token_urlsafe(48)
+          admin_password = secrets.token_urlsafe(32)
+          encoded_postgres_password = quote(postgres_password, safe="")
 
-      - name: Build deployable images
-        run: docker compose --env-file .env build
+          values = {
+              "ENVIRONMENT": "development",
+              "POSTGRES_DB": "hosprime",
+              "POSTGRES_USER": "hosprime",
+              "POSTGRES_PASSWORD": postgres_password,
+              "POSTGRES_PORT": "15432",
+              "DATABASE_URL": f"postgresql://hosprime:{encoded_postgres_password}@postgres:5432/hosprime",
+              "POSTGRES_URL": f"postgresql://hosprime:{encoded_postgres_password}@postgres:5432/hosprime",
+              "REDIS_URL": "redis://redis:6379/0",
+              "REDIS_PORT": "16379",
+              "NEO4J_URI": "bolt://neo4j:7687",
+              "NEO4J_USER": "neo4j",
+              "NEO4J_PASSWORD": neo4j_password,
+              "NEO4J_HTTP_PORT": "17474",
+              "NEO4J_BOLT_PORT": "17687",
+              "GEMINI_API_KEY": "",
+              "JWT_SECRET": jwt_secret,
+              "BOOTSTRAP_ADMIN_USERNAME": "ci-admin",
+              "BOOTSTRAP_ADMIN_PASSWORD": admin_password,
+              "SEED_DEMO_DATA": "false",
+              "CORS_ORIGINS": '["http://localhost:18080","http://127.0.0.1:18080"]',
+              "BACKEND_PORT": "18000",
+              "FRONTEND_PORT": "18080",
+          }
 
-      - name: Start complete Compose stack and wait for health
-        run: docker compose --env-file .env up --detach --wait --wait-timeout 240
+          Path(".env").write_text(
+              "".join(f"{key}={value}\n" for key, value in values.items()),
+              encoding="utf-8",
+          )
+          PY
+          chmod 600 .env
+
+      - name: Build, start and verify exact-source Compose stack
+        shell: bash
+        run: HOSPRIME_ENV_FILE="$PWD/.env" bash scripts/bootstrap.sh
 
       - name: Verify backend liveness and readiness
         shell: bash
@@ -111,7 +178,11 @@ jobs:
           live = json.loads(Path("/tmp/hosprime-health-live.json").read_text())
           ready = json.loads(Path("/tmp/hosprime-health-ready.json").read_text())
           assert live.get("status") == "live", live
-          assert ready.get("status") in {"ready", "degraded"}, ready
+          assert ready.get("status") == "ready", ready
+          assert ready.get("configuration_warnings") == [], ready
+          assert ready.get("capability_warnings") == [
+              "External AI provider is not configured"
+          ], ready
           assert ready.get("database_dialect") == "postgresql", ready
           PY
 
@@ -119,7 +190,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -v ON_ERROR_STOP=1 <<'SQL'
+          compose() {
+            docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env "$@"
+          }
+
+          compose exec -T postgres psql -U hosprime -d hosprime -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE IF NOT EXISTS bootstrap_restart_probe (
             id integer PRIMARY KEY,
             value text NOT NULL
@@ -129,15 +204,15 @@ jobs:
           ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
           SQL
 
-          before_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          before_hash="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
           test -n "$before_hash"
 
-          docker compose --env-file .env restart backend
+          compose restart backend
           timeout 180 bash -c 'until curl --fail --silent http://127.0.0.1:18000/health/ready >/dev/null; do sleep 3; done'
 
-          preserved="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT value FROM bootstrap_restart_probe WHERE id=1;")"
-          after_hash="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
-          admin_count="$(docker compose --env-file .env exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT count(*) FROM users WHERE username='ci-admin';")"
+          preserved="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT value FROM bootstrap_restart_probe WHERE id=1;")"
+          after_hash="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT hashed_password FROM users WHERE username='ci-admin';")"
+          admin_count="$(compose exec -T postgres psql -U hosprime -d hosprime -Atc "SELECT count(*) FROM users WHERE username='ci-admin';")"
 
           test "$preserved" = "preserve-me"
           test "$before_hash" = "$after_hash"
@@ -148,17 +223,35 @@ jobs:
           curl --fail --silent --show-error --output /tmp/hosprime-frontend.html http://127.0.0.1:18080/
           test -s /tmp/hosprime-frontend.html
 
+      - name: Verify browser CORS preflight for the published frontend origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          curl --fail --silent --show-error \
+            --request OPTIONS \
+            --header 'Origin: http://127.0.0.1:18080' \
+            --header 'Access-Control-Request-Method: GET' \
+            --dump-header "$headers" \
+            --output /dev/null \
+            http://127.0.0.1:18000/health/live
+          grep -qi '^access-control-allow-origin: http://127.0.0.1:18080' "$headers"
+
       - name: Record running service state
-        run: docker compose --env-file .env ps
+        run: docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env ps
 
       - name: Capture Compose diagnostics on failure
         if: failure()
         shell: bash
         run: |
           mkdir -p /tmp/hosprime-compose-diagnostics
-          docker compose --env-file .env ps --all > /tmp/hosprime-compose-diagnostics/compose-ps.txt 2>&1 || true
-          docker compose --env-file .env logs --no-color --timestamps --tail=300 > /tmp/hosprime-compose-diagnostics/compose-logs.txt 2>&1 || true
-          docker inspect hosprime_postgres hosprime_redis hosprime_neo4j hosprime_backend hosprime_frontend > /tmp/hosprime-compose-diagnostics/docker-inspect.json 2>&1 || true
+          compose=(docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env)
+          "${compose[@]}" ps --all > /tmp/hosprime-compose-diagnostics/compose-ps.txt 2>&1 || true
+          "${compose[@]}" logs --no-color --timestamps --tail=300 > /tmp/hosprime-compose-diagnostics/compose-logs.txt 2>&1 || true
+          mapfile -t container_ids < <("${compose[@]}" ps -q | sort -u)
+          if ((${#container_ids[@]})); then
+            docker inspect "${container_ids[@]}" > /tmp/hosprime-compose-diagnostics/docker-inspect.json 2>&1 || true
+          fi
           cat /tmp/hosprime-compose-diagnostics/compose-ps.txt
           tail -n 120 /tmp/hosprime-compose-diagnostics/compose-logs.txt || true
 
@@ -173,7 +266,7 @@ jobs:
 
       - name: Stop complete Compose stack
         if: always()
-        run: docker compose --env-file .env down --volumes --remove-orphans || true
+        run: docker compose --project-name "$HOSPRIME_COMPOSE_PROJECT_NAME" --env-file .env down --volumes --remove-orphans || true
 
       - name: Remove ephemeral environment
         if: always()

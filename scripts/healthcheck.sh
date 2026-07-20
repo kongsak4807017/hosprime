@@ -132,14 +132,20 @@ import json
 import sys
 from pathlib import Path
 
+EXPECTED_CAPABILITY_WARNINGS = ["External AI provider is not configured"]
+
 live = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 ready = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
 if live.get("status") != "live":
-    raise SystemExit(f"Unexpected liveness response: {live}")
+    raise SystemExit("Backend liveness contract failed")
 if ready.get("status") != "ready":
-    raise SystemExit(f"Backend is not fully ready: {ready}")
+    raise SystemExit("Backend readiness contract failed")
 if ready.get("database_dialect") != "postgresql":
-    raise SystemExit(f"Expected PostgreSQL runtime: {ready}")
+    raise SystemExit("Backend database readiness contract failed")
+if ready.get("configuration_warnings") != []:
+    raise SystemExit("Backend reported security or configuration warnings")
+if ready.get("capability_warnings") != EXPECTED_CAPABILITY_WARNINGS:
+    raise SystemExit("Backend provider capability evidence is incomplete or unexpected")
 PY
 
 printf 'HosPrime health check passed (Compose project: %s, source commit: %s).\n' "$PROJECT_NAME" "$SOURCE_SHA"

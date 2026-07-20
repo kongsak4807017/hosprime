@@ -54,7 +54,12 @@ exit 0
     return repo, bin_dir, docker_log
 
 
-def _write_env(path: Path, neo4j_uri: str, neo4j_user: str = "neo4j") -> None:
+def _write_env(
+    path: Path,
+    neo4j_uri: str,
+    neo4j_user: str = "neo4j",
+    published_bolt_port: int = 7687,
+) -> None:
     path.write_text(
         "\n".join(
             (
@@ -66,7 +71,7 @@ def _write_env(path: Path, neo4j_uri: str, neo4j_user: str = "neo4j") -> None:
                 f"NEO4J_URI={neo4j_uri}",
                 f"NEO4J_USER={neo4j_user}",
                 "NEO4J_PASSWORD=fixture-neo4j-password",
-                "NEO4J_BOLT_PORT=7687",
+                f"NEO4J_BOLT_PORT={published_bolt_port}",
                 "JWT_SECRET=fixture-jwt-secret-long-enough-for-validation",
                 "BOOTSTRAP_ADMIN_USERNAME=admin",
                 "BOOTSTRAP_ADMIN_PASSWORD=fixture-admin-password",
@@ -110,10 +115,10 @@ def test_shell_rejects_inconsistent_neo4j_uri_before_compose(tmp_path: Path) -> 
     assert "config --quiet" not in docker_log.read_text(encoding="utf-8")
 
 
-def test_shell_accepts_consistent_neo4j_uri_and_runs_compose(tmp_path: Path) -> None:
+def test_shell_accepts_internal_neo4j_uri_with_custom_published_port(tmp_path: Path) -> None:
     repo, bin_dir, docker_log = _prepare_fixture(tmp_path)
     env_file = tmp_path / "runtime.env"
-    _write_env(env_file, "bolt://neo4j:7687")
+    _write_env(env_file, "bolt://neo4j:7687", published_bolt_port=17687)
 
     result = _run(
         ["bash", "scripts/bootstrap.sh", "--skip-build"],
@@ -132,6 +137,7 @@ def test_powershell_validates_neo4j_uri_before_compose() -> None:
 
     assert "function Assert-Neo4jConfiguration" in powershell
     assert "NEO4J_BOLT_PORT" in powershell
+    assert "$uri.Port -ne 7687" in powershell
     assert "[System.Uri]::TryCreate" in powershell
     assert powershell.index("Assert-Neo4jConfiguration $EnvFile") < powershell.index(
         "Invoke-Compose config --quiet"

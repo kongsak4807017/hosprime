@@ -84,13 +84,20 @@ if any(not values.get(key) for key in required):
     raise SystemExit(1)
 
 for key in ("DATABASE_URL", "POSTGRES_URL"):
-    parsed = urlsplit(values[key])
+    try:
+        parsed = urlsplit(values[key])
+        port = parsed.port
+    except ValueError:
+        raise SystemExit(1)
     if (
         parsed.scheme not in {"postgres", "postgresql"}
         or parsed.hostname != "postgres"
+        or port != 5432
         or unquote(parsed.username or "") != values["POSTGRES_USER"]
         or unquote(parsed.password or "") != values["POSTGRES_PASSWORD"]
         or unquote(parsed.path.lstrip("/")) != values["POSTGRES_DB"]
+        or parsed.query
+        or parsed.fragment
     ):
         raise SystemExit(1)
 PY

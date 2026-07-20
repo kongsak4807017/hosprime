@@ -20,6 +20,7 @@ on:
       - "backend/app/db/session.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
+      - "backend/tests/test_provider_capability_readiness.py"
       - "backend/tests/test_deploy_scripts.py"
       - "backend/tests/test_deploy_source_provenance.py"
       - "backend/tests/test_deploy_env_creation_guard.py"
@@ -50,6 +51,7 @@ on:
       - "backend/app/db/session.py"
       - "backend/app/main.py"
       - "backend/tests/test_secure_runtime_config.py"
+      - "backend/tests/test_provider_capability_readiness.py"
       - "backend/tests/test_deploy_scripts.py"
       - "backend/tests/test_deploy_source_provenance.py"
       - "backend/tests/test_deploy_env_creation_guard.py"
@@ -99,6 +101,7 @@ jobs:
         run: |
           python -m pytest -q \
             backend/tests/test_secure_runtime_config.py \
+            backend/tests/test_provider_capability_readiness.py \
             backend/tests/test_deploy_scripts.py \
             backend/tests/test_deploy_source_provenance.py \
             backend/tests/test_deploy_env_creation_guard.py \
@@ -176,6 +179,10 @@ jobs:
           ready = json.loads(Path("/tmp/hosprime-health-ready.json").read_text())
           assert live.get("status") == "live", live
           assert ready.get("status") == "ready", ready
+          assert ready.get("configuration_warnings") == [], ready
+          assert ready.get("capability_warnings") == [
+              "External AI provider is not configured"
+          ], ready
           assert ready.get("database_dialect") == "postgresql", ready
           PY
 

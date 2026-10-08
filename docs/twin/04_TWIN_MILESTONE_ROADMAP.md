@@ -105,7 +105,7 @@ Give department heads a practical workbench.
 
 ### Objective
 
-Create a governed workspace for staff and roles.
+Create a governed workspace for staff and roles, while establishing the Role Twin / Person Overlay separation required for safe future agents.
 
 ### Core functions
 
@@ -115,18 +115,32 @@ Create a governed workspace for staff and roles.
 - My Documents
 - My Role Responsibilities
 - My AI Copilot
+- Role Twin
+- Person Overlay
+- Responsibility Graph
+- Competency Graph
+- reviewed Decision Episodes
+- Collaboration / Escalation Graph
+- Agent Manifest preview
 
 ### Governance boundary
 
 - Personal notes are not organizational evidence by default.
-- Role memory and person memory remain separated.
-- Promotion to organizational memory requires review.
+- Role Memory and Person Memory remain separated.
+- The system models work and authority, not an employee's whole personality.
+- Promotion to Role or Organizational Memory requires review and provenance.
+- Observed behavior does not automatically override formal policy or authority.
+- Sensitive psychological or protected characteristics are not inferred for convenience.
+- A Person Overlay never grants tool or data permissions by itself.
 
 ### Exit criteria
 
 - Staff can complete routine knowledge and documentation work faster than baseline.
 - AI answers only with approved evidence or declares insufficient evidence.
-- Staff twin does not expose unnecessary sensitive information.
+- Staff Twin does not expose unnecessary sensitive information.
+- Role Twin remains usable independently of the current employee.
+- Person Overlay can be archived or re-bound without losing approved Role Memory.
+- A versioned Agent Manifest can be compiled from approved twin artifacts, but no increased autonomy is implied.
 
 ## 7. Milestone 4: Process Twin
 
@@ -194,26 +208,52 @@ Expand from hospital operations to public-health intelligence.
 - Patient-level data is not shared by default.
 - System supports policy and resource decisions with evidence.
 
-## 10. Milestone 7: AI Agent Twin
+## 10. Milestone 7: AI Agent Twin and Agent Harness
 
 ### Objective
 
-Make AI agents themselves auditable operating entities.
+Make AI agents auditable operating entities that run only through a governed Agent Harness.
+
+### Core capabilities
+
+- unique nonhuman agent identity and accountable sponsor;
+- versioned Agent Manifest;
+- task-scoped Context Builder;
+- separated Working, Episodic, Semantic, Decision, Role and Organizational Memory;
+- governed retrieval through Semantic Layer / Data Mart / Knowledge Graph / RAG;
+- Tool / MCP Gateway;
+- policy and least-privilege permission engine;
+- Human Approval Gateway;
+- sandbox and resource limits;
+- evaluation suite;
+- trace / audit service;
+- kill switch and revocation;
+- shadow-mode evaluation before autonomy expansion.
 
 ### Core metrics
 
 - recommendation count;
+- accepted task rate;
 - approval rate;
 - rejection reason;
+- human override rate;
 - evidence completeness;
+- unsupported assertion rate;
 - policy conflict rate;
+- unauthorized tool-call attempt rate;
+- unsafe action attempt rate;
 - incident count;
+- cost per accepted task;
 - last validation date.
 
 ### Exit criteria
 
-- Governance team can identify high-risk agent behavior.
-- Agents cannot exceed their authority boundary.
+- Every production agent has a unique identity, owner, version and revocation path.
+- Governance team can reconstruct agent runs from evidence, policy, tools, approvals and outcomes.
+- Agents cannot exceed their authority boundary even if model instructions attempt to do so.
+- High-impact actions require the configured human approval and downstream authorization.
+- Kill switch, credential revocation and tool revocation are tested.
+- Shadow/evaluation evidence meets approved thresholds.
 - Agent certification status is visible.
 
 ## 11. Milestone 8: Federated Regional Twin
@@ -270,3 +310,8 @@ Pause or defer a twin if:
 3. Implement Decision Twin metadata schema.
 4. Add Staff Twin and Role Memory boundary tests.
 5. Add AI Agent Twin acceptance metrics.
+6. Implement Role Twin + Person Overlay schema and boundary tests.
+7. Implement Decision Episode + provenance schema.
+8. Implement Agent Manifest schema and fail-closed compiler.
+9. Implement Agent Identity / Permission registry and Tool Gateway contract.
+10. Implement shadow-mode evaluator, Human Approval Gateway and kill-switch tests.

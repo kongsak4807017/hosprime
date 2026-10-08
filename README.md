@@ -107,7 +107,7 @@ EXPERIMENT= allowed only as prototype / sandbox
 | M0.9 | Daily-use loop | WAITING | User can capture work, ask memory-backed questions, and record lessons daily |
 | M0.10 | Personal Twin v0.1 release candidate | WAITING | `git clone -> docker compose up` works with documented limitations |
 | M1 | Governed Knowledge Oracle MVP | WAITING | Approved documents can be ingested, retrieved and cited with access control and audit |
-| M2 | Staff / Role Twin | WAITING | Person Memory, Staff Twin and Role Memory are separated and permissioned |
+| M2 | Staff / Role Twin + Agent Harness foundation | WAITING | Role Twin and Person Overlay are separated, evidence-linked and permissioned; approved twin artifacts can compile to a versioned Agent Manifest without granting autonomy |
 | M3 | Executive Office | WAITING | Executive, Planner, Analyst, Knowledge and Action agents support real work loops |
 | M4 | Backoffice AI Workforce and AIOC | WAITING | Finance, HR, procurement, quality and security agents run under governance |
 | M5 | Hospital / Province / Region Twin | WAITING | Aggregated intelligence scales without sharing patient-level data by default |
@@ -305,6 +305,28 @@ Research Staging
 - External research remains in staging until reviewed for authority, relevance and applicability.
 - Organizational RAG indexes only approved sources with ownership, provenance, classification, version and review status.
 
+
+## Twin-to-agent architecture rule
+
+HosPrime does not convert an employee directly into an AI clone.
+
+```text
+Role Twin
++ approved Person Overlay
++ Responsibility / Competency / Decision Memory
+        |
+        v
+Versioned Agent Manifest
+        |
+        v
+Agent Harness
+        |
+        v
+Governed AI Agent
+```
+
+The Agent Harness is the mandatory runtime boundary for identity, context, memory, retrieval, tools, policy, least-privilege permission, human approval, evaluation, audit, sandboxing, step/cost limits and revocation. A model change must never bypass these controls.
+
 ## Project control documents
 
 See the controlled plans under:
@@ -321,14 +343,16 @@ Important references:
 - `docs/operations/CONTINUOUS_RESEARCH_AND_LEARNING_LOOP.md`
 - `docs/governance/MATURITY_GATES.md`
 - `docs/governance/SUCCESS_SCORECARD.md`
+- `docs/twin/06_HUMAN_ORGANIZATION_TWIN_AGENT_HARNESS.md`
+- `docs/twin/07_EMPLOYEE_TWIN_CAPTURE_AND_EVALUATION_PLAYBOOK.md`
 
 ## Milestone sequence
 
 ```text
 M0 Personal Twin OS v0.1
 M1 Governed Knowledge Oracle
-M2 Staff / Role Twin and Organization Memory
-M3 Executive Office and Role Twin
+M2 Staff / Role Twin, Organization Memory and Agent Harness foundation
+M3 Executive Office and governed Role Agents
 M4 Backoffice AI Workforce and AIOC
 M5 Forecast, Scenario and Provincial Health Brain
 ```

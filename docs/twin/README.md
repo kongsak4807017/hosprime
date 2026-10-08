@@ -12,6 +12,7 @@ This folder contains the controlled blueprint for the HosPrime Healthcare Twin E
 - `05_DECISION_TWIN_SEMANTICA.md` — Decision Twin and Semantica-style decision intelligence integration blueprint.
 - `06_HUMAN_ORGANIZATION_TWIN_AGENT_HARNESS.md` — canonical Role Twin / Person Overlay -> Agent Manifest -> Agent Harness architecture, identity, permissions, memory, tools, approval, audit and lifecycle controls.
 - `07_EMPLOYEE_TWIN_CAPTURE_AND_EVALUATION_PLAYBOOK.md` — production playbook for extracting governed work knowledge from an employee/role, shadow-mode validation, evaluation, onboarding and offboarding.
+- `08_EMPLOYEE_TO_AGENT_PRODUCTION_SOP.md` — stage-gated production SOP for the full 01–17 pipeline, with detailed Copilot Mode runtime, approvals, audit, monitoring and transition to bounded Approved Agent Mode.
 
 ## Core product statement
 
